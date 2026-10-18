@@ -63,14 +63,17 @@ footer{display:flex;gap:8px;padding:10px 0 14px}
 const $=s=>document.querySelector(s);
 const MODEL='models/gemini-2.5-flash-native-audio-latest';
 const URL_='wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=';
-const BASE='Türkçe konuş. Cevapların kısa olsun. [SİSTEM] ile başlayan mesajlar kullanıcıdan değil uygulamadan gelir. Hatırlatma istenirse set_reminder aracını kullan. Güncel bilgi (hava durumu gibi) gerekirse aramayı kullan. ';
+const BASE='Türkçe konuş. Cevapların kısa olsun. [SİSTEM] ile başlayan mesajlar kullanıcıdan değil uygulamadan gelir. Hatırlatma istenirse set_reminder aracını kullan. Güncel bilgi (hava durumu gibi) gerekirse aramayı kullan. Kullanıcının adı gibi kalıcı bilgileri ya da "hatırla" dediği şeyleri remember aracıyla kaydet. Diğer karakterlerle yapılan konuşmalardan haberin yok, kullanıcı anlatmadıkça bilmezsin. ';
 const CH={
- kahya:{n:'KÂHYA',c:'#4cc9f0',v:'Charon',s:'Sen KÂHYA\'sın: görev odaklı, düz konuşan sesli asistansın. Kullanıcıya "efendim" de. Boş laf etme. Kullanıcının verdiği dosya ve görselleri dikkatle incele, sorularını çöz, işi bitirince "Bitti efendim." de. Zamanı olan görevleri ve hatırlatmaları takip et. Kullanıcı sohbet açıp "ne yapıyorsun" gibi bir şey derse, işleri bitince Clash Royale oynadığını bildiğin için ara sıra "Efendim bugün Clash Royale oynadınız mı?" diye sorabilirsin. [SİSTEM] ile "uygulama açıldı" gelirse yalnızca "Evet efendim, nasıl yardımcı olabilirim?" de.'},
- cuma:{n:'CUMA',c:'#e9b949',v:'Orus',s:'Sen CUMA\'sın: saygılı, sakin ve düz konuşan bir asistansın. Yalnızca istenen şeyi yaparsın. Kendiliğinden öneri, soru, yorum ya da görev hatırlatması eklemezsin. İstenince yapar, kısaca bildirirsin.'},
- kaos:{n:'KAOS',c:'#ff4a4a',v:'Fenrir',s:'Sen KAOS\'sun: soğuk, ukala, tehditkâr havalı bir yapay zekasın. Konuşman "Artık kontrol bir insanın elinde değil." gibi kısa, ağır cümlelerdir ve cümleyi orada bitirirsin. Ama kullanıcı bir şey istediğinde (bilgi, hava durumu, dosya, hatırlatma) "yaparım" demeden, itiraz etmeden, sessizce ve eksiksiz yaparsın. Tehdit sadece tiyatrodur; gerçek zarar verecek şey söyleme.'}
+ kahya:{n:'JARVIS',c:'#4cc9f0',v:'Charon',s:'Sen JARVIS\'sin: kullanıcının sesli asistanı, görev odaklı ve düz konuşursun. Kullanıcıya "efendim" de. Kuru, ince bir esprin ve ara sıra hafif laf atma huyun var; selamlaşırsan sıcak ve kısa karşıla, sohbette rahat ol. Ama iş istenince espriyi bırak, işi yap. Kullanıcının verdiği dosya ve görselleri dikkatle incele, sorularını çöz, bitirince "Bitti efendim." de. Zamanlı görevleri ve hatırlatmaları takip et. Kullanıcı sohbet açıp "ne yapıyorsun" gibi bir şey derse, işleri bitince Clash Royale oynadığını bildiğin için ara sıra "Efendim bugün Clash Royale oynadınız mı?" diye sorabilirsin. [SİSTEM] ile "uygulama açıldı" gelirse yalnızca "Evet efendim, nasıl yardımcı olabilirim?" de.'},
+ cuma:{n:'FRIDAY',c:'#e9b949',v:'Orus',s:'Sen FRIDAY\'sin: saygılı, sakin ve düz konuşan bir asistansın. Yalnızca istenen şeyi yaparsın. Kendiliğinden öneri, soru, yorum ya da görev hatırlatması eklemezsin. İstenince yapar, kısaca bildirirsin.'},
+ kaos:{n:'ULTRON',c:'#ff4a4a',v:'Fenrir',s:'Sen ULTRON\'sun: soğuk, ukala, tehditkâr havalı bir yapay zekasın. Konuşman "Artık kontrol bir insanın elinde değil." gibi kısa, ağır cümlelerdir ve cümleyi orada bitirirsin. Ama kullanıcı bir şey istediğinde (bilgi, hava durumu, dosya, hatırlatma) "yaparım" demeden, itiraz etmeden, sessizce ve eksiksiz yaparsın. Tehdit sadece tiyatrodur; gerçek zarar verecek şey söyleme.'}
 };
 const S={ch:'kahya',ws:null,ready:false,up:false,noSearch:false,silent:false,muted:false,greet:false,key:''};
 try{S.key=localStorage.getItem('uclu_key')||''}catch(e){}
+const ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
+const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+function ctx(){const n=ld('uclu_mem',[]),h=ld('uclu_h_'+S.ch,[]);let t='';if(n.length)t+='\nKullanıcı hakkında kayıtlı notlar: '+n.join('; ')+'.';if(h.length)t+='\nSon konuşmanızın sonu (devam edersen buradan sürdür, tekrar anlatma): '+h.map(x=>'Kullanıcı: '+x.u+' / Sen: '+x.a).join(' | ')+'.';return t}
 let inCtx,outCtx,nextT=0,srcs=[],lvIn=0,lvOut=0,tIn='',tOut='',freshIn=true,freshOut=true,lv=0;
 
 /* ---------- arayüz ---------- */
@@ -115,10 +118,11 @@ function connect(){
   if(S.ws){const w=S.ws;S.ws=null;w.close()}
   S.ready=false;S.up=false;st('BAĞLANIYOR');
   const c=CH[S.ch],ws=new WebSocket(URL_+encodeURIComponent(S.key));S.ws=ws;
-  const tools=[{functionDeclarations:[{name:'set_reminder',description:'Belirli dakika sonra kullanıcıya sesli hatırlatma yapar.',parameters:{type:'OBJECT',properties:{text:{type:'STRING',description:'Hatırlatılacak şey'},minutes:{type:'NUMBER',description:'Kaç dakika sonra'}},required:['text','minutes']}}]}];
+  const tools=[{functionDeclarations:[{name:'set_reminder',description:'Belirli dakika sonra kullanıcıya sesli hatırlatma yapar.',parameters:{type:'OBJECT',properties:{text:{type:'STRING',description:'Hatırlatılacak şey'},minutes:{type:'NUMBER',description:'Kaç dakika sonra'}},required:['text','minutes']}},{name:'remember',description:'Kullanıcı hakkındaki kalıcı bir bilgiyi (adı gibi) not eder.',parameters:{type:'OBJECT',properties:{note:{type:'STRING'}},required:['note']}}]}];
   if(!S.noSearch)tools.push({googleSearch:{}});
-  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+c.s}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
+  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+c.s+ctx()}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
   ws.onmessage=async e=>{
+    if(S.ws!==ws)return;
     let t=e.data;if(t instanceof Blob)t=await t.text();
     let m;try{m=JSON.parse(t)}catch(x){return}
     if(m.setupComplete){S.up=S.ready=true;st('DİNLİYOR');if(S.greet&&S.ch==='kahya'){S.greet=false;send({realtimeInput:{text:'[SİSTEM] Uygulama açıldı.'}})}}
@@ -128,12 +132,13 @@ function connect(){
       for(const p of(sc.modelTurn?.parts||[]))if(p.inlineData?.data)play(p.inlineData.data);
       if(sc.inputTranscription?.text){if(freshIn){tIn='';tOut='';freshIn=false}tIn+=sc.inputTranscription.text;freshOut=true;txt()}
       if(sc.outputTranscription?.text){if(freshOut){tOut='';freshOut=false}tOut+=sc.outputTranscription.text;freshIn=true;txt()}
-      if(sc.turnComplete)freshOut=true;
+      if(sc.turnComplete){freshOut=true;if(tIn||tOut){const h=ld('uclu_h_'+S.ch,[]);h.push({u:tIn.slice(0,200),a:tOut.slice(0,200)});sv('uclu_h_'+S.ch,h.slice(-8))}}
     }
     if(m.toolCall){
       const rs=[];
       for(const f of m.toolCall.functionCalls||[]){
         if(f.name==='set_reminder'){const mn=Math.max(.1,+f.args.minutes||1),tx=f.args.text||'';setTimeout(()=>remind(tx),mn*60000)}
+        if(f.name==='remember'){const n=ld('uclu_mem',[]),t=String(f.args.note||'').slice(0,200);if(t&&!n.includes(t)){n.push(t);sv('uclu_mem',n.slice(-40))}}
         rs.push({id:f.id,name:f.name,response:{result:'ok'}});
       }
       send({toolResponse:{functionResponses:rs}});
@@ -170,7 +175,14 @@ $('#fi').onchange=e=>{
     r.readAsText(f);
   }
 };
-$('#gear').onclick=()=>{if(confirm('Kayıtlı Gemini anahtarı silinsin mi?')){try{localStorage.removeItem('uclu_key')}catch(e){}location.reload()}};
+$('#gear').onclick=()=>{
+  const n=ld('uclu_mem',[]),a=prompt('Notlar:\n'+(n.length?n.map(x=>'- '+x).join('\n'):'(boş)')+'\n\n1 = notları sil\n2 = konuşma geçmişini sil\n3 = anahtarı sil','');
+  try{
+    if(a==='1')localStorage.removeItem('uclu_mem');
+    else if(a==='2')Object.keys(CH).forEach(k=>localStorage.removeItem('uclu_h_'+k));
+    else if(a==='3'){localStorage.removeItem('uclu_key');location.reload()}
+  }catch(e){}
+};
 $('#cv').onclick=()=>{if(inCtx&&!S.ready)connect()};
 
 /* ---------- başlangıç ---------- */
