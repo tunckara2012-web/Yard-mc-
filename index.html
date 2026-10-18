@@ -34,6 +34,14 @@ footer{display:flex;gap:8px;padding:10px 0 14px}
 .bt{width:100%;max-width:340px;height:48px;border-radius:12px;border:1px solid var(--c);background:var(--c);color:#06080c;font:700 16px system-ui;cursor:pointer}
 .bt.g{background:none;color:var(--tx);border-color:#2a3544}
 .hid{display:none!important}
+#pn{position:fixed;inset:0;background:rgba(6,8,12,.97);z-index:6;display:flex;flex-direction:column;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 18px) 18px calc(env(safe-area-inset-bottom,0px) + 18px);overflow:auto}
+#pn h2{font:700 22px system-ui}
+#pn p{color:var(--mu);font-size:14px}
+.nt{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--pn);border-radius:12px;padding:8px 8px 8px 14px}
+.nt button{background:none;border:0;color:var(--c);font:600 14px system-ui;padding:8px;cursor:pointer}
+.row{display:flex;gap:8px}
+#ni{flex:1;min-width:0;height:46px;border-radius:12px;border:1px solid #2a3544;background:var(--pn);color:var(--tx);padding:0 14px;font:16px system-ui}
+#pn .bt{max-width:none}
 </style>
 </head>
 <body>
@@ -58,6 +66,15 @@ footer{display:flex;gap:8px;padding:10px 0 14px}
   <input id="kin" type="password" placeholder="Gemini API anahtarı" autocomplete="off">
   <button class="bt" id="yes">Evet, açık</button>
   <button class="bt g" id="no">Ses kapalı, yazarak devam et</button>
+</div>
+<div id="pn" class="hid">
+  <h2>Hafıza</h2>
+  <p>Buraya yazdığın notları üç karakter de bilir. Karakterler kendi öğrendiklerini de buraya ekler.</p>
+  <div id="nl"></div>
+  <div class="row"><input id="ni" placeholder="Örn. Adım Ahmet" autocomplete="off"><button class="bt" id="nadd" style="width:auto;padding:0 18px">Ekle</button></div>
+  <button class="bt g" id="hclr">Konuşma geçmişini sil</button>
+  <button class="bt g" id="kclr">Gemini anahtarını sil</button>
+  <button class="bt" id="pclose">Kapat</button>
 </div>
 <script>
 const $=s=>document.querySelector(s);
@@ -175,14 +192,18 @@ $('#fi').onchange=e=>{
     r.readAsText(f);
   }
 };
-$('#gear').onclick=()=>{
-  const n=ld('uclu_mem',[]),a=prompt('Notlar:\n'+(n.length?n.map(x=>'- '+x).join('\n'):'(boş)')+'\n\n1 = notları sil\n2 = konuşma geçmişini sil\n3 = anahtarı sil','');
-  try{
-    if(a==='1')localStorage.removeItem('uclu_mem');
-    else if(a==='2')Object.keys(CH).forEach(k=>localStorage.removeItem('uclu_h_'+k));
-    else if(a==='3'){localStorage.removeItem('uclu_key');location.reload()}
-  }catch(e){}
-};
+let dirty=false;
+function nl(){
+  const n=ld('uclu_mem',[]),L=$('#nl');L.innerHTML='';
+  if(!n.length){L.textContent='Henüz not yok.';return}
+  n.forEach((x,i)=>{const d=document.createElement('div');d.className='nt';const t=document.createElement('span'),b=document.createElement('button');
+    t.textContent=x;b.textContent='Sil';b.onclick=()=>{const m=ld('uclu_mem',[]);m.splice(i,1);sv('uclu_mem',m);dirty=true;nl()};d.append(t,b);L.append(d)});
+}
+$('#gear').onclick=()=>{nl();$('#pn').classList.remove('hid')};
+$('#nadd').onclick=()=>{const t=$('#ni').value.trim().slice(0,200);if(!t)return;const m=ld('uclu_mem',[]);if(!m.includes(t)){m.push(t);sv('uclu_mem',m.slice(-40))}$('#ni').value='';dirty=true;nl()};
+$('#pclose').onclick=()=>{$('#pn').classList.add('hid');if(dirty&&inCtx){dirty=false;connect()}};
+$('#hclr').onclick=()=>{if(confirm('Konuşma geçmişi silinsin mi?')){Object.keys(CH).forEach(k=>{try{localStorage.removeItem('uclu_h_'+k)}catch(e){}});dirty=true}};
+$('#kclr').onclick=()=>{if(confirm('Gemini anahtarı silinsin mi?')){try{localStorage.removeItem('uclu_key')}catch(e){}location.reload()}};
 $('#cv').onclick=()=>{if(inCtx&&!S.ready)connect()};
 
 /* ---------- başlangıç ---------- */
