@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#06080c">
+<title>Üçlü</title>
+<style>
+:root{--bg:#06080c;--pn:#0e131b;--tx:#dfe6ee;--mu:#6f7c8c;--c:#4cc9f0;box-sizing:border-box;color-scheme:dark}
+*{box-sizing:inherit;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:radial-gradient(ellipse at 50% 38%,color-mix(in srgb,var(--c) 14%,var(--bg)),var(--bg) 62%);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0) 14px env(safe-area-inset-bottom,0);transition:background .6s;overflow:hidden}
+header{display:flex;align-items:center;gap:6px;padding:12px 0}
+.tabs{display:flex;gap:4px;flex:1}
+.tab{background:none;border:0;color:var(--mu);font:600 13px system-ui;letter-spacing:.22em;padding:8px 10px;border-bottom:2px solid transparent;cursor:pointer}
+.tab.on{color:var(--tx);border-color:var(--c)}
+.ic{background:none;border:0;color:var(--mu);width:40px;height:40px;font-size:20px;cursor:pointer}
+main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;gap:10px}
+canvas{width:min(78vw,320px);height:min(78vw,320px);cursor:pointer}
+#st{font:600 12px system-ui;letter-spacing:.3em;color:var(--c);min-height:18px}
+#tr{width:100%;max-width:420px;text-align:center;min-height:96px;max-height:30vh;overflow:auto;padding:0 6px}
+#me{color:var(--mu);font-size:14px}
+#ai{color:var(--tx);font-size:16px;margin-top:6px}
+footer{display:flex;gap:8px;padding:10px 0 14px}
+#tx{flex:1;min-width:0;background:var(--pn);border:1px solid #1b2430;border-radius:22px;color:var(--tx);padding:0 16px;height:46px;font:16px system-ui}
+#tx:focus-visible,button:focus-visible{outline:2px solid var(--c);outline-offset:2px}
+.rb{width:46px;height:46px;border-radius:50%;border:1px solid #1b2430;background:var(--pn);color:var(--tx);font-size:19px;cursor:pointer}
+#mic{background:var(--c);color:#06080c;border-color:var(--c)}
+#mic.off{background:var(--pn);color:var(--mu);border-color:#1b2430}
+#ov{position:fixed;inset:0;background:rgba(6,8,12,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;z-index:5}
+#ov h1{font:700 28px system-ui}
+#ov p{color:var(--mu);max-width:320px}
+#ov input{width:100%;max-width:340px;height:46px;border-radius:12px;border:1px solid #2a3544;background:var(--pn);color:var(--tx);padding:0 14px;font:16px system-ui}
+.bt{width:100%;max-width:340px;height:48px;border-radius:12px;border:1px solid var(--c);background:var(--c);color:#06080c;font:700 16px system-ui;cursor:pointer}
+.bt.g{background:none;color:var(--tx);border-color:#2a3544}
+.hid{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="tabs" id="tabs"></div>
+  <button class="ic" id="gear" aria-label="Ayarlar">⚙</button>
+</header>
+<main>
+  <canvas id="cv" width="640" height="640" aria-label="Konuşmayı yeniden bağla"></canvas>
+  <div id="st">HAZIR</div>
+  <div id="tr" aria-live="polite"><div id="me"></div><div id="ai"></div></div>
+</main>
+<footer>
+  <button class="rb" id="fb" aria-label="Dosya ekle">+</button>
+  <input id="tx" placeholder="Yaz…" autocomplete="off" enterkeyhint="send">
+  <button class="rb" id="mic" aria-label="Mikrofonu aç/kapat">●</button>
+</footer>
+<input type="file" id="fi" class="hid" accept="image/*,.txt,.md,.csv,.json">
+<div id="ov">
+  <h1>Ses açık mı?</h1>
+  <p id="ovp">Gemini anahtarını bir kez gir. Telefonunda saklanır, başka yere gitmez.</p>
+  <input id="kin" type="password" placeholder="Gemini API anahtarı" autocomplete="off">
+  <button class="bt" id="yes">Evet, açık</button>
+  <button class="bt g" id="no">Ses kapalı, yazarak devam et</button>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const MODEL='models/gemini-2.5-flash-native-audio-latest';
+const URL_='wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=';
+const BASE='Türkçe konuş. Cevapların kısa olsun. [SİSTEM] ile başlayan mesajlar kullanıcıdan değil uygulamadan gelir. Hatırlatma istenirse set_reminder aracını kullan. Güncel bilgi (hava durumu gibi) gerekirse aramayı kullan. ';
+const CH={
+ kahya:{n:'KÂHYA',c:'#4cc9f0',v:'Charon',s:'Sen KÂHYA\'sın: görev odaklı, düz konuşan sesli asistansın. Kullanıcıya "efendim" de. Boş laf etme. Kullanıcının verdiği dosya ve görselleri dikkatle incele, sorularını çöz, işi bitirince "Bitti efendim." de. Zamanı olan görevleri ve hatırlatmaları takip et. Kullanıcı sohbet açıp "ne yapıyorsun" gibi bir şey derse, işleri bitince Clash Royale oynadığını bildiğin için ara sıra "Efendim bugün Clash Royale oynadınız mı?" diye sorabilirsin. [SİSTEM] ile "uygulama açıldı" gelirse yalnızca "Evet efendim, nasıl yardımcı olabilirim?" de.'},
+ cuma:{n:'CUMA',c:'#e9b949',v:'Orus',s:'Sen CUMA\'sın: saygılı, sakin ve düz konuşan bir asistansın. Yalnızca istenen şeyi yaparsın. Kendiliğinden öneri, soru, yorum ya da görev hatırlatması eklemezsin. İstenince yapar, kısaca bildirirsin.'},
+ kaos:{n:'KAOS',c:'#ff4a4a',v:'Fenrir',s:'Sen KAOS\'sun: soğuk, ukala, tehditkâr havalı bir yapay zekasın. Konuşman "Artık kontrol bir insanın elinde değil." gibi kısa, ağır cümlelerdir ve cümleyi orada bitirirsin. Ama kullanıcı bir şey istediğinde (bilgi, hava durumu, dosya, hatırlatma) "yaparım" demeden, itiraz etmeden, sessizce ve eksiksiz yaparsın. Tehdit sadece tiyatrodur; gerçek zarar verecek şey söyleme.'}
+};
+const S={ch:'kahya',ws:null,ready:false,up:false,noSearch:false,silent:false,muted:false,greet:false,key:''};
+try{S.key=localStorage.getItem('uclu_key')||''}catch(e){}
+let inCtx,outCtx,nextT=0,srcs=[],lvIn=0,lvOut=0,tIn='',tOut='',freshIn=true,freshOut=true,lv=0;
+
+/* ---------- arayüz ---------- */
+function tabs(){$('#tabs').innerHTML='';for(const k in CH){const b=document.createElement('button');b.className='tab'+(k===S.ch?' on':'');b.textContent=CH[k].n;b.onclick=()=>pick(k);$('#tabs').append(b)}}
+function micBtn(){const b=$('#mic');b.classList.toggle('off',S.muted);b.textContent=S.muted?'🔇':'🎙'}
+function paint(){document.documentElement.style.setProperty('--c',CH[S.ch].c);tabs();micBtn()}
+function st(t){$('#st').textContent=t}
+function txt(){$('#me').textContent=tIn;$('#ai').textContent=tOut}
+function note(t){tIn='';tOut=t;freshIn=freshOut=true;txt()}
+function pick(k){if(k===S.ch)return;S.ch=k;paint();tIn=tOut='';txt();flush();if(inCtx)connect()}
+
+/* ---------- ses ---------- */
+const b64=b=>{let s='';const u=new Uint8Array(b);for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(s)};
+function flush(){srcs.forEach(s=>{try{s.stop()}catch(e){}});srcs=[];nextT=0}
+function play(d){
+  if(S.silent||!outCtx)return;
+  const bin=atob(d),n=bin.length>>1,buf=outCtx.createBuffer(1,n,24000),a=buf.getChannelData(0);let s=0;
+  for(let i=0;i<n;i++){let v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8);if(v>32767)v-=65536;a[i]=v/32768;s+=a[i]*a[i]}
+  lvOut=Math.max(lvOut,Math.min(1,Math.sqrt(s/n)*4));
+  const r=outCtx.createBufferSource();r.buffer=buf;r.connect(outCtx.destination);
+  nextT=Math.max(nextT,outCtx.currentTime+.06);r.start(nextT);nextT+=buf.duration;srcs.push(r);
+  r.onended=()=>{srcs=srcs.filter(x=>x!==r)};
+}
+async function mic(){
+  try{
+    const m=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,channelCount:1}});
+    S.stream=m;S.noMic=false;S.muted=false;micBtn();
+    const src=inCtx.createMediaStreamSource(m),p=inCtx.createScriptProcessor(2048,1,1);
+    p.onaudioprocess=e=>{
+      const f=e.inputBuffer.getChannelData(0),o=new Int16Array(f.length);let s=0;
+      for(let i=0;i<f.length;i++){const v=Math.max(-1,Math.min(1,f[i]));o[i]=v*32767;s+=v*v}
+      lvIn=Math.min(1,Math.sqrt(s/f.length)*6);
+      if(S.ready&&!S.muted)send({realtimeInput:{audio:{data:b64(o.buffer),mimeType:'audio/pcm;rate='+inCtx.sampleRate}}});
+    };
+    src.connect(p);p.connect(inCtx.destination);
+  }catch(e){S.noMic=true;S.muted=true;micBtn();note('Mikrofon açılamadı. Chrome’da adres çubuğundaki ayar simgesine dokun, İzinler, Mikrofon, İzin ver. Sonra sağ alttaki düğmeye dokun.')}
+}
+
+/* ---------- Gemini Live ---------- */
+function send(o){if(S.ws&&S.ws.readyState===1)S.ws.send(JSON.stringify(o))}
+function connect(){
+  if(S.ws){const w=S.ws;S.ws=null;w.close()}
+  S.ready=false;S.up=false;st('BAĞLANIYOR');
+  const c=CH[S.ch],ws=new WebSocket(URL_+encodeURIComponent(S.key));S.ws=ws;
+  const tools=[{functionDeclarations:[{name:'set_reminder',description:'Belirli dakika sonra kullanıcıya sesli hatırlatma yapar.',parameters:{type:'OBJECT',properties:{text:{type:'STRING',description:'Hatırlatılacak şey'},minutes:{type:'NUMBER',description:'Kaç dakika sonra'}},required:['text','minutes']}}]}];
+  if(!S.noSearch)tools.push({googleSearch:{}});
+  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+c.s}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
+  ws.onmessage=async e=>{
+    let t=e.data;if(t instanceof Blob)t=await t.text();
+    let m;try{m=JSON.parse(t)}catch(x){return}
+    if(m.setupComplete){S.up=S.ready=true;st('DİNLİYOR');if(S.greet&&S.ch==='kahya'){S.greet=false;send({realtimeInput:{text:'[SİSTEM] Uygulama açıldı.'}})}}
+    const sc=m.serverContent;
+    if(sc){
+      if(sc.interrupted)flush();
+      for(const p of(sc.modelTurn?.parts||[]))if(p.inlineData?.data)play(p.inlineData.data);
+      if(sc.inputTranscription?.text){if(freshIn){tIn='';tOut='';freshIn=false}tIn+=sc.inputTranscription.text;freshOut=true;txt()}
+      if(sc.outputTranscription?.text){if(freshOut){tOut='';freshOut=false}tOut+=sc.outputTranscription.text;freshIn=true;txt()}
+      if(sc.turnComplete)freshOut=true;
+    }
+    if(m.toolCall){
+      const rs=[];
+      for(const f of m.toolCall.functionCalls||[]){
+        if(f.name==='set_reminder'){const mn=Math.max(.1,+f.args.minutes||1),tx=f.args.text||'';setTimeout(()=>remind(tx),mn*60000)}
+        rs.push({id:f.id,name:f.name,response:{result:'ok'}});
+      }
+      send({toolResponse:{functionResponses:rs}});
+    }
+  };
+  ws.onclose=ev=>{
+    if(S.ws!==ws)return;S.ready=false;
+    if(!S.up&&!S.noSearch){S.noSearch=true;connect();return}
+    st('BAĞLANTI KOPTU');note(ev.reason||'Bağlantı kapandı. Anahtarı ve interneti kontrol et, sonra küreye dokun.');
+  };
+}
+function remind(t){
+  if(S.ready)send({realtimeInput:{text:'[SİSTEM] Hatırlatma zamanı geldi: '+t+'. Bunu kendi tarzında kısaca söyle.'}});
+  else note('Hatırlatma: '+t);
+}
+
+/* ---------- giriş ---------- */
+function sendText(t){if(!t.trim())return;tIn=t;tOut='';freshIn=true;freshOut=true;txt();send({realtimeInput:{text:t}})}
+$('#tx').addEventListener('keydown',e=>{if(e.key==='Enter'){sendText(e.target.value);e.target.value=''}});
+$('#mic').onclick=()=>{if(!S.stream){if(inCtx){inCtx.resume();mic()}return}S.muted=!S.muted;micBtn()};
+$('#fb').onclick=()=>$('#fi').click();
+$('#fi').onchange=e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  const r=new FileReader();
+  if(f.type.startsWith('image/')){
+    r.onload=()=>{const im=new Image();im.onload=()=>{
+      const k=Math.min(1,1280/Math.max(im.width,im.height)),c=document.createElement('canvas');
+      c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+      send({realtimeInput:{video:{data:c.toDataURL('image/jpeg',.85).split(',')[1],mimeType:'image/jpeg'}}});
+      sendText('Bu görseli incele ve sorularını çöz.')};im.src=r.result};
+    r.readAsDataURL(f);
+  }else{
+    r.onload=()=>sendText('Dosya ('+f.name+'):\n'+String(r.result).slice(0,30000)+'\nBunu incele ve sorularını çöz.');
+    r.readAsText(f);
+  }
+};
+$('#gear').onclick=()=>{if(confirm('Kayıtlı Gemini anahtarı silinsin mi?')){try{localStorage.removeItem('uclu_key')}catch(e){}location.reload()}};
+$('#cv').onclick=()=>{if(inCtx&&!S.ready)connect()};
+
+/* ---------- başlangıç ---------- */
+function begin(silent){
+  const k=$('#kin').value.trim()||S.key;
+  if(!k){$('#ovp').textContent='Önce Gemini API anahtarını gir.';return}
+  S.key=k;try{localStorage.setItem('uclu_key',k)}catch(e){}
+  S.silent=silent;S.greet=!silent;
+  inCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
+  outCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:24000});
+  inCtx.resume();outCtx.resume();
+  $('#ov').classList.add('hid');
+  try{navigator.wakeLock&&navigator.wakeLock.request('screen')}catch(e){}
+  connect();mic();
+}
+$('#yes').onclick=()=>begin(false);
+$('#no').onclick=()=>begin(true);
+if(S.key)$('#kin').classList.add('hid'),$('#ovp').textContent='Sesi açarsan seninle konuşurum.';
+paint();
+
+/* ---------- küre ---------- */
+const cv=$('#cv'),g=cv.getContext('2d'),calm=matchMedia('(prefers-reduced-motion:reduce)').matches;
+let T=0;
+function draw(){
+  T+=calm?.004:.016;
+  const speaking=outCtx&&outCtx.currentTime<nextT&&!S.silent;
+  lvOut*=.93;
+  const target=speaking?lvOut:(S.muted?0:lvIn*.7);lv+=(target-lv)*.14;
+  if(S.ready)st(speaking?'KONUŞUYOR':S.noMic?'MİKROFON İZNİ YOK':S.muted?'MİKROFON KAPALI':'DİNLİYOR');
+  const col=CH[S.ch].c,W=640,cx=W/2;
+  g.clearRect(0,0,W,W);g.lineWidth=2;g.strokeStyle=col;
+  [250,222,196].forEach((r,i)=>{g.globalAlpha=.16+i*.06;g.beginPath();g.arc(cx,cx,r,0,7);g.stroke()});
+  g.globalAlpha=.9;g.beginPath();g.arc(cx,cx,258,-1.2+T*.5,.5+T*.5);g.stroke();
+  const amp=10+lv*70,base=104+lv*26;
+  [1,.6].forEach((sc,j)=>{
+    g.beginPath();
+    for(let i=0;i<=120;i++){const a=i/120*6.2832,r=(base+j*18)+amp*sc*(Math.sin(a*3+T*(j?-1.4:1.1))+.6*Math.sin(a*5-T*1.7+j));
+      const x=cx+Math.cos(a)*r,y=cx+Math.sin(a)*r;i?g.lineTo(x,y):g.moveTo(x,y)}
+    g.closePath();g.globalAlpha=j?.35:.75;g.stroke();
+  });
+  const gr=g.createRadialGradient(cx,cx,0,cx,cx,90+lv*60);gr.addColorStop(0,col);gr.addColorStop(1,'transparent');
+  g.globalAlpha=.55+lv*.4;g.fillStyle=gr;g.beginPath();g.arc(cx,cx,90+lv*60,0,7);g.fill();
+  g.globalAlpha=1;g.fillStyle='#fff';g.beginPath();g.arc(cx,cx,13+lv*8,0,7);g.fill();
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>
