@@ -116,7 +116,7 @@ footer{display:flex;gap:8px;padding:10px 0 14px}
 const $=s=>document.querySelector(s);
 const MODEL='models/gemini-2.5-flash-native-audio-latest';
 const URL_='wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=';
-const BASE='Türkçe konuş. Cevapların kısa olsun. [SİSTEM] ile başlayan mesajlar kullanıcıdan değil uygulamadan gelir. Hatırlatma istenirse set_reminder aracını kullan. Güncel bilgi (hava durumu gibi) gerekirse aramayı kullan. Kullanıcının adı gibi kalıcı bilgileri ya da "hatırla" dediği şeyleri remember aracıyla kaydet. Görev eklenirse add_task, görev bitince complete_task, "devam et" denirse resume_tasks aracını kullan. Diğer karakterlerle yapılan konuşmalardan haberin yok, kullanıcı anlatmadıkça bilmezsin. ';
+const BASE='Türkçe konuş. Cevapların kısa olsun. [SİSTEM] ile başlayan mesajlar kullanıcıdan değil uygulamadan gelir. Süreli bir şey (zamanlayıcı, hatırlatma) istenirse mutlaka set_reminder aracını çağır; çağırmadan kurdum deme. Saati ve kalan süreyi asla tahmin etme, get_time aracını kullan. Kurduğun hatırlatmalar kullanıcının Görevler ekranında görünür. Sen yalnızca kullanıcıyla konuşurken çalışırsın; arka planda araştırma ya da iş yapamazsın. Uygulama kapalıyken ya da sen cevap vermiyorken bir şey üzerinde çalıştığını asla söyleme; görev listesi sadece bir listedir. Kullanıcı \"ne yapıyorsun\" derse bunu dürüstçe söyle. Güncel bilgi (hava durumu gibi) gerekirse aramayı kullan. Kullanıcının adı gibi kalıcı bilgileri ya da "hatırla" dediği şeyleri remember aracıyla kaydet. Görev eklenirse add_task, görev bitince complete_task, "devam et" denirse resume_tasks aracını kullan. Diğer karakterlerle yapılan konuşmalardan haberin yok, kullanıcı anlatmadıkça bilmezsin. ';
 const CH={
  kahya:{n:'JARVIS',c:'#4cc9f0',v:'Charon',s:'Sen JARVIS\'sin: kullanıcının sesli asistanı, görev odaklı ve düz konuşursun. Kullanıcıya "efendim" de. Kuru, ince bir esprin ve ara sıra hafif laf atma huyun var; selamlaşırsan sıcak ve kısa karşıla, sohbette rahat ol. Ama iş istenince espriyi bırak, işi yap. Kullanıcının verdiği dosya ve görselleri dikkatle incele, sorularını çöz, bitirince "Bitti efendim." de. Zamanlı görevleri ve hatırlatmaları takip et. Kullanıcı sohbet açıp "ne yapıyorsun" gibi bir şey derse, işleri bitince Clash Royale oynadığını bildiğin için ara sıra "Efendim bugün Clash Royale oynadınız mı?" diye sorabilirsin. [SİSTEM] ile "uygulama açıldı" gelirse yalnızca "Evet efendim, nasıl yardımcı olabilirim?" de.'},
  cuma:{n:'FRIDAY',c:'#e9b949',v:'Orus',s:'Sen FRIDAY\'sin: saygılı, sakin ve düz konuşan bir asistansın. Yalnızca istenen şeyi yaparsın. Kendiliğinden öneri, soru, yorum ya da görev hatırlatması eklemezsin. İstenince yapar, kısaca bildirirsin.'},
@@ -126,7 +126,7 @@ const S={ch:'kahya',ws:null,ready:false,up:false,noSearch:false,silent:false,mut
 try{S.key=localStorage.getItem('uclu_key')||''}catch(e){}
 const ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
 const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
-function ctx(){const n=ld('uclu_mem',[]),h=ld('uclu_log',[]).filter(x=>x.c===S.ch).slice(-12);let t='';if(n.length)t+='\nKullanıcı hakkında kayıtlı notlar: '+n.join('; ')+'.';if(h.length)t+='\nSon konuşmanızın sonu (devam edersen buradan sürdür, tekrar anlatma): '+h.map(x=>'Kullanıcı: '+x.u.slice(0,250)+' / Sen: '+x.a.slice(0,250)).join(' | ')+'.';const k=tasks().filter(x=>x.st!=='done');if(k.length)t+='\nGörev listesi: '+k.map(x=>x.t+(x.d?' ('+x.d+')':'')+' ['+(x.st==='active'?'devam':'duraklatıldı')+']').join('; ')+'.';return t}
+function ctx(){const n=ld('uclu_mem',[]),h=ld('uclu_log',[]).filter(x=>x.c===S.ch).slice(-12);let t='\nŞu an saat '+hm(Date.now())+', '+new Date().toLocaleDateString('tr',{weekday:'long',day:'numeric',month:'long'})+'.';if(n.length)t+='\nKullanıcı hakkında kayıtlı notlar: '+n.join('; ')+'.';if(h.length)t+='\nSon konuşmanızın sonu (devam edersen buradan sürdür, tekrar anlatma): '+h.map(x=>'Kullanıcı: '+x.u.slice(0,250)+' / Sen: '+x.a.slice(0,250)).join(' | ')+'.';const k=tasks().filter(x=>x.st!=='done');if(k.length)t+='\nGörev listesi: '+k.map(x=>x.t+(x.d?' ('+x.d+')':'')+' ['+(x.st==='active'?'devam':'duraklatıldı')+']').join('; ')+'.';return t}
 let inCtx,outCtx,nextT=0,srcs=[],lvIn=0,lvOut=0,tIn='',tOut='',freshIn=true,freshOut=true,lv=0;
 
 /* ---------- arayüz ---------- */
@@ -171,7 +171,7 @@ function connect(){
   if(S.ws){const w=S.ws;S.ws=null;w.close()}
   S.ready=false;S.up=false;st('BAĞLANIYOR');
   const c=CH[S.ch],ws=new WebSocket(URL_+encodeURIComponent(S.key));S.ws=ws;
-  const tools=[{functionDeclarations:[{name:'set_reminder',description:'Belirli dakika sonra kullanıcıya sesli hatırlatma yapar.',parameters:{type:'OBJECT',properties:{text:{type:'STRING',description:'Hatırlatılacak şey'},minutes:{type:'NUMBER',description:'Kaç dakika sonra'}},required:['text','minutes']}},{name:'remember',description:'Kullanıcı hakkındaki kalıcı bir bilgiyi (adı gibi) not eder.',parameters:{type:'OBJECT',properties:{note:{type:'STRING'}},required:['note']}},{name:'add_task',description:'Göreve ekler. minutes verilirse o kadar dakika sonra hatırlatır.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'},detail:{type:'STRING'},minutes:{type:'NUMBER'}},required:['title']}},{name:'complete_task',description:'Başlığı eşleşen görevi bitti yapar.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'}},required:['title']}},{name:'resume_tasks',description:'Duraklatılmış görevleri devam ettirir.'}]}];
+  const tools=[{functionDeclarations:[{name:'set_reminder',description:'Belirli dakika sonra kullanıcıya sesli hatırlatma yapar.',parameters:{type:'OBJECT',properties:{text:{type:'STRING',description:'Hatırlatılacak şey'},minutes:{type:'NUMBER',description:'Kaç dakika sonra'}},required:['text','minutes']}},{name:'remember',description:'Kullanıcı hakkındaki kalıcı bir bilgiyi (adı gibi) not eder.',parameters:{type:'OBJECT',properties:{note:{type:'STRING'}},required:['note']}},{name:'add_task',description:'Göreve ekler. minutes verilirse o kadar dakika sonra hatırlatır.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'},detail:{type:'STRING'},minutes:{type:'NUMBER'}},required:['title']}},{name:'complete_task',description:'Başlığı eşleşen görevi bitti yapar.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'}},required:['title']}},{name:'resume_tasks',description:'Duraklatılmış görevleri devam ettirir.'},{name:'get_time',description:'Şu anki saati ve süreli görevlerin kalan süresini verir.'}]}];
   if(!S.noSearch)tools.push({googleSearch:{}});
   ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+c.s+ctx()}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
   ws.onmessage=async e=>{
@@ -190,12 +190,14 @@ function connect(){
     if(m.toolCall){
       const rs=[];
       for(const f of m.toolCall.functionCalls||[]){
-        if(f.name==='set_reminder'){const mn=Math.max(.1,+f.args.minutes||1),tx=f.args.text||'';setTimeout(()=>remind(tx),mn*60000)}
+        let res='ok';
+        if(f.name==='set_reminder'){const mn=Math.max(.1,+f.args.minutes||1);addTask(f.args.text||'Hatırlatma','',mn,'r');res='Kuruldu: '+mn+' dakika sonra, saat '+hm(Date.now()+mn*60000)+'. Görevler ekranında görünür.'}
         if(f.name==='remember'){const n=ld('uclu_mem',[]),t=String(f.args.note||'').slice(0,200);if(t&&!n.includes(t)){n.push(t);sv('uclu_mem',n.slice(-40))}}
-        if(f.name==='add_task')addTask(f.args.title||'Görev',f.args.detail,+f.args.minutes||0);
+        if(f.name==='add_task'){const mn=+f.args.minutes||0;addTask(f.args.title||'Görev',f.args.detail,mn);res=mn?'Eklendi, saat '+hm(Date.now()+mn*60000)+'.':'Eklendi.'}
+        if(f.name==='get_time')res=timeInfo();
         if(f.name==='complete_task'){const k=String(f.args.title||'').toLowerCase(),x=tasks().find(y=>y.st!=='done'&&y.t.toLowerCase().includes(k));if(x)setSt(x.id,'done')}
         if(f.name==='resume_tasks')resume();
-        rs.push({id:f.id,name:f.name,response:{result:'ok'}});
+        rs.push({id:f.id,name:f.name,response:{result:res}});
       }
       send({toolResponse:{functionResponses:rs}});
     }
@@ -268,12 +270,14 @@ async function keep(){try{if('wakeLock'in navigator&&!wl){wl=await navigator.wak
 let timers={};
 const tasks=()=>ld('uclu_tasks',[]),SL={active:'Devam ediyor',paused:'Duraklatıldı',done:'Bitti'};
 function saveT(a){sv('uclu_tasks',a);renderT()}
-function arm(x){clearTimeout(timers[x.id]);if(x.st==='active'&&x.due)timers[x.id]=setTimeout(()=>remind('Görev zamanı: '+x.t),Math.max(500,x.due-Date.now()))}
-function addTask(t,d,m){const a=tasks(),x={id:Date.now()+Math.random().toString(36).slice(2,5),t:String(t).slice(0,120),d:String(d||'').slice(0,300),due:m>0?Date.now()+m*60000:0,st:'active'};a.push(x);saveT(a);arm(x)}
-function setSt(id,st){const a=tasks(),x=a.find(y=>y.id===id);if(!x)return;x.st=st;saveT(a);arm(x);if(st==='done')clearTimeout(timers[id])}
+const hm=t=>new Date(t).toLocaleTimeString('tr',{hour:'2-digit',minute:'2-digit'});
+function timeInfo(){const n=Date.now(),k=tasks().filter(x=>x.st!=='done'&&x.due).map(x=>x.t+' ('+(x.st==='paused'?'duraklatıldı':Math.max(0,Math.round((x.due-n)/60000))+' dk kaldı, saat '+hm(x.due))+')');return 'Şu an saat '+hm(n)+'.'+(k.length?' Süreli görevler: '+k.join('; ')+'.':'')}
+function arm(x){clearTimeout(timers[x.id]);if(x.st==='active'&&x.due)timers[x.id]=setTimeout(()=>remind((x.k==='r'?'Zamanlayıcı doldu: ':'Görev zamanı: ')+x.t),Math.max(500,x.due-Date.now()))}
+function addTask(t,d,m,k){const a=tasks(),x={id:Date.now()+Math.random().toString(36).slice(2,5),t:String(t).slice(0,120),d:String(d||'').slice(0,300),due:m>0?Date.now()+m*60000:0,st:'active',k:k||''};a.push(x);saveT(a);arm(x)}
+function setSt(id,st){const a=tasks(),x=a.find(y=>y.id===id);if(!x)return;if(st==='paused'&&x.due)x.rem=Math.max(0,x.due-Date.now());if(st==='active'&&x.rem!=null){x.due=Date.now()+x.rem;delete x.rem}x.st=st;saveT(a);arm(x);if(st==='done')clearTimeout(timers[id])}
 function delT(id){clearTimeout(timers[id]);saveT(tasks().filter(x=>x.id!==id))}
-function resume(){const a=tasks();a.forEach(x=>{if(x.st==='paused'){x.st='active';arm(x)}});saveT(a);$('#rq').classList.add('hid')}
-function pauseAll(){const a=tasks();let c=0;a.forEach(x=>{if(x.st==='active'){x.st='paused';c++}});if(c)saveT(a);Object.values(timers).forEach(clearTimeout);timers={};stopCam()}
+function resume(){const a=tasks();a.forEach(x=>{if(x.st==='paused'){x.st='active';if(x.rem!=null){x.due=Date.now()+x.rem;delete x.rem}arm(x)}});saveT(a);$('#rq').classList.add('hid')}
+function pauseAll(){const a=tasks();let c=0;a.forEach(x=>{if(x.st==='active'&&x.k!=='r'){x.st='paused';if(x.due)x.rem=Math.max(0,x.due-Date.now());clearTimeout(timers[x.id]);c++}});if(c)saveT(a);stopCam()}
 function ask(p){$('#rqt').textContent='Duran görevler: '+p.map(x=>x.t).join(', ')+'. Devam edeyim mi?';$('#rq').classList.remove('hid')}
 function greet(){
   S.greet=false;const p=tasks().filter(x=>x.st==='paused');
@@ -287,7 +291,7 @@ function renderT(){
     const d=document.createElement('div');d.className='tk'+(x.st==='done'?' dn':'');
     d.innerHTML='<b></b><small></small><small></small><div class="row"></div>';
     d.children[0].textContent=x.t;d.children[1].textContent=x.d;
-    d.children[2].textContent=SL[x.st]+(x.due?' · '+new Date(x.due).toLocaleTimeString('tr',{hour:'2-digit',minute:'2-digit'}):'');
+    d.children[2].textContent=SL[x.st]+(x.due&&x.st==='active'?' · '+hm(x.due):'');
     const R=d.children[3],mk=(l,f)=>{const b=document.createElement('button');b.textContent=l;b.onclick=f;R.append(b)};
     if(x.st!=='done'){mk('Bitti',()=>setSt(x.id,'done'));mk(x.st==='active'?'Duraklat':'Devam',()=>setSt(x.id,x.st==='active'?'paused':'active'))}
     mk('Sil',()=>delT(x.id));L.append(d);
@@ -297,7 +301,7 @@ $('#tkb').onclick=()=>{renderT();$('#tp').classList.remove('hid')};
 $('#tclose').onclick=()=>$('#tp').classList.add('hid');
 $('#tadd').onclick=()=>{const t=$('#tt').value.trim();if(!t)return;addTask(t,$('#td').value.trim(),+$('#tm').value||0);$('#tt').value=$('#td').value=$('#tm').value=''};
 $('#rqy').onclick=resume;$('#rqn').onclick=()=>$('#rq').classList.add('hid');
-document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseAll();else if(inCtx){keep();S.greet=true;S.ready?greet():connect()}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseAll();else{tasks().forEach(arm);if(inCtx){keep();S.greet=true;S.ready?greet():connect()}}});
 addEventListener('pagehide',pauseAll);
 
 /* ---------- kamera ---------- */
@@ -310,7 +314,7 @@ async function cam(face){
 $('#cb').onclick=()=>{if(S.cam)stopCam();else $('#cq').classList.toggle('hid')};
 $('#cqx').onclick=()=>$('#cq').classList.add('hid');
 document.querySelectorAll('#cq [data-f]').forEach(b=>b.onclick=()=>{$('#cq').classList.add('hid');cam(b.dataset.f)});
-pauseAll();renderT();
+pauseAll();tasks().forEach(arm);renderT();
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 /* ---------- başlangıç ---------- */
