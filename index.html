@@ -108,6 +108,10 @@ footer{display:flex;gap:8px;padding:10px 0 14px}
   <p>Buraya yazdığın notları üç karakter de bilir. Karakterler kendi öğrendiklerini de buraya ekler.</p>
   <div id="nl"></div>
   <div class="row"><input id="ni" placeholder="Örn. Adım Ahmet" autocomplete="off"><button class="bt" id="nadd" style="width:auto;padding:0 18px">Ekle</button></div>
+  <button class="bt" id="bk">Yedekle (dosya indir)</button>
+  <button class="bt g" id="rs">Yedekten geri yükle</button>
+  <input type="file" id="rf" class="hid" accept=".json,application/json">
+  <p>Yedekte notların, görevlerin ve geçmişin olur. Gemini anahtarın olmaz.</p>
   <button class="bt g" id="hclr">Konuşma geçmişini sil</button>
   <button class="bt g" id="kclr">Gemini anahtarını sil</button>
   <button class="bt" id="pclose">Kapat</button>
@@ -244,6 +248,23 @@ $('#gear').onclick=()=>{nl();$('#pn').classList.remove('hid')};
 $('#nadd').onclick=()=>{const t=$('#ni').value.trim().slice(0,200);if(!t)return;const m=ld('uclu_mem',[]);if(!m.includes(t)){m.push(t);sv('uclu_mem',m.slice(-40))}$('#ni').value='';dirty=true;nl()};
 $('#pclose').onclick=()=>{$('#pn').classList.add('hid');if(dirty&&inCtx){dirty=false;connect()}};
 $('#hclr').onclick=()=>{if(confirm('Konuşma geçmişi silinsin mi?')){try{localStorage.removeItem('uclu_log')}catch(e){}dirty=true}};
+const BK=['uclu_mem','uclu_tasks','uclu_log'];
+$('#bk').onclick=()=>{
+  const o={v:1,t:Date.now()};BK.forEach(k=>o[k]=ld(k,[]));
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(o)],{type:'application/json'}));
+  a.download='jarvis-yedek-'+new Date().toISOString().slice(0,10)+'.json';document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+};
+$('#rs').onclick=()=>$('#rf').click();
+$('#rf').onchange=e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{
+    const o=JSON.parse(r.result);if(!o||o.v!==1)throw 0;
+    if(!confirm('Şu anki notlar, görevler ve geçmiş bu yedekle değiştirilsin mi?'))return;
+    BK.forEach(k=>{if(Array.isArray(o[k]))sv(k,o[k])});dirty=true;nl();renderT();tasks().forEach(arm);alert('Yedek geri yüklendi.');
+  }catch(x){alert('Bu dosya geçerli bir yedek değil.')}};
+  r.readAsText(f);
+};
 $('#kclr').onclick=()=>{if(confirm('Gemini anahtarı silinsin mi?')){try{localStorage.removeItem('uclu_key')}catch(e){}location.reload()}};
 $('#cv').onclick=()=>{if(inCtx&&!S.ready)connect()};
 
