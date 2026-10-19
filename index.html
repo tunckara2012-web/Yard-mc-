@@ -198,7 +198,7 @@ function connect(){
   };
   ws.onclose=ev=>{
     if(S.ws!==ws)return;S.ready=false;
-    if(!S.up&&!S.noSearch){S.noSearch=true;connect();return}
+    if(!S.noSearch&&(!S.up||/not supported/i.test(ev.reason||''))){S.noSearch=true;connect();return}
     st('BAĞLANTI KOPTU');note(ev.reason||'Bağlantı kapandı. Anahtarı ve interneti kontrol et, sonra küreye dokun.');
   };
 }
@@ -241,6 +241,9 @@ $('#hclr').onclick=()=>{if(confirm('Konuşma geçmişi silinsin mi?')){Object.ke
 $('#kclr').onclick=()=>{if(confirm('Gemini anahtarı silinsin mi?')){try{localStorage.removeItem('uclu_key')}catch(e){}location.reload()}};
 $('#cv').onclick=()=>{if(inCtx&&!S.ready)connect()};
 
+/* ---------- ekran açık kalsın ---------- */
+let wl=null;
+async function keep(){try{if('wakeLock'in navigator&&!wl){wl=await navigator.wakeLock.request('screen');wl.addEventListener('release',()=>{wl=null})}}catch(e){}}
 /* ---------- görevler ---------- */
 let timers={};
 const tasks=()=>ld('uclu_tasks',[]),SL={active:'Devam ediyor',paused:'Duraklatıldı',done:'Bitti'};
@@ -274,7 +277,7 @@ $('#tkb').onclick=()=>{renderT();$('#tp').classList.remove('hid')};
 $('#tclose').onclick=()=>$('#tp').classList.add('hid');
 $('#tadd').onclick=()=>{const t=$('#tt').value.trim();if(!t)return;addTask(t,$('#td').value.trim(),+$('#tm').value||0);$('#tt').value=$('#td').value=$('#tm').value=''};
 $('#rqy').onclick=resume;$('#rqn').onclick=()=>$('#rq').classList.add('hid');
-document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseAll();else if(inCtx){S.greet=true;S.ready?greet():connect()}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseAll();else if(inCtx){keep();S.greet=true;S.ready?greet():connect()}});
 addEventListener('pagehide',pauseAll);
 
 /* ---------- kamera ---------- */
@@ -300,7 +303,7 @@ function begin(silent){
   outCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:24000});
   inCtx.resume();outCtx.resume();
   $('#ov').classList.add('hid');
-  try{navigator.wakeLock&&navigator.wakeLock.request('screen')}catch(e){}
+  keep();
   connect();mic();
 }
 $('#yes').onclick=()=>begin(false);
