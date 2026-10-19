@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#06080c">
 <title>Üçlü</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{--bg:#06080c;--pn:#0e131b;--tx:#dfe6ee;--mu:#6f7c8c;--c:#4cc9f0;box-sizing:border-box;color-scheme:dark}
 *{box-sizing:inherit;margin:0;-webkit-tap-highlight-color:transparent}
@@ -53,6 +56,9 @@ footer{display:flex;gap:8px;padding:10px 0 14px}
 .tk .row button{flex:1;height:38px;border-radius:10px;border:1px solid #2a3544;background:none;color:var(--tx);font:600 13px system-ui;cursor:pointer}
 #rq{width:100%;max-width:420px;background:var(--pn);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;text-align:center;font-size:14px}
 #rq .bt{width:auto;flex:1;height:40px;font-size:14px}
+#cq{position:fixed;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:4;background:var(--pn);border:1px solid #1b2430;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
+#cq .bt{max-width:none;height:44px;font-size:15px}
+#cvid.fr{transform:scaleX(-1)}
 #cvid{position:fixed;top:calc(env(safe-area-inset-top,0px) + 64px);right:14px;width:96px;height:128px;object-fit:cover;border-radius:12px;border:1px solid var(--c);z-index:2}
 </style>
 </head>
@@ -83,6 +89,7 @@ footer{display:flex;gap:8px;padding:10px 0 14px}
   <button class="bt" id="yes">Evet, açık</button>
   <button class="bt g" id="no">Ses kapalı, yazarak devam et</button>
 </div>
+<div id="cq" class="hid"><button class="bt" data-f="user">Ön kamera</button><button class="bt" data-f="environment">Arka kamera</button><button class="bt g" id="cqx">Vazgeç</button></div>
 <div id="tp" class="hid">
   <h2>Görevler</h2>
   <div id="tl"></div>
@@ -272,14 +279,16 @@ addEventListener('pagehide',pauseAll);
 
 /* ---------- kamera ---------- */
 function stopCam(){if(S.cam){S.cam.getTracks().forEach(t=>t.stop());S.cam=null}clearInterval(S.ct);$('#cvid').classList.add('hid');$('#cb').style.outline=''}
-async function cam(){
-  if(S.cam){stopCam();return}
-  try{S.cam=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:640}})}catch(e){note('Kamera açılamadı. Chrome’da adres çubuğundaki ayar simgesinden kameraya izin ver.');return}
-  const v=$('#cvid'),c=document.createElement('canvas');v.srcObject=S.cam;v.classList.remove('hid');v.play();$('#cb').style.outline='2px solid var(--c)';
+async function cam(face){
+  try{S.cam=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:face},width:640}})}catch(e){note('Kamera açılamadı. Chrome’da adres çubuğundaki ayar simgesinden kameraya izin ver.');return}
+  const v=$('#cvid'),c=document.createElement('canvas');v.srcObject=S.cam;v.classList.toggle('fr',face==='user');v.classList.remove('hid');v.play();$('#cb').style.outline='2px solid var(--c)';
   S.ct=setInterval(()=>{if(!S.ready||!v.videoWidth)return;c.width=480;c.height=480*v.videoHeight/v.videoWidth;c.getContext('2d').drawImage(v,0,0,c.width,c.height);send({realtimeInput:{video:{data:c.toDataURL('image/jpeg',.6).split(',')[1],mimeType:'image/jpeg'}}})},1500);
 }
-$('#cb').onclick=cam;
+$('#cb').onclick=()=>{if(S.cam)stopCam();else $('#cq').classList.toggle('hid')};
+$('#cqx').onclick=()=>$('#cq').classList.add('hid');
+document.querySelectorAll('#cq [data-f]').forEach(b=>b.onclick=()=>{$('#cq').classList.add('hid');cam(b.dataset.f)});
 pauseAll();renderT();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 /* ---------- başlangıç ---------- */
 function begin(silent){
