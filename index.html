@@ -137,7 +137,7 @@ canvas.wake{animation:wk 1.1s ease-out}
 </div>
 <script>
 const $=s=>document.querySelector(s);
-const MODEL='models/gemini-3.8-flash-native-audio-latest';
+const MODEL='models/gemini-2.5-flash-native-audio-latest';
 const URL_='wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=';
 const BASE='Türkçe konuş. Cevapların kısa olsun. [SİSTEM] ile başlayan mesajlar kullanıcıdan değil uygulamadan gelir. Süreli bir şey (zamanlayıcı, hatırlatma) istenirse mutlaka set_reminder aracını çağır; çağırmadan kurdum deme. Saati ve kalan süreyi asla tahmin etme, get_time aracını kullan. Kurduğun hatırlatmalar kullanıcının Görevler ekranında görünür. Sen yalnızca kullanıcıyla konuşurken çalışırsın; arka planda araştırma ya da iş yapamazsın. Uygulama kapalıyken ya da sen cevap vermiyorken bir şey üzerinde çalıştığını asla söyleme; görev listesi sadece bir listedir. Kullanıcı \"ne yapıyorsun\" derse bunu dürüstçe söyle. Kullanıcı uyku moduna geçmeni isterse sleep_mode aracını çağır. İnternet araştırması gerektiren görevleri add_task ile research:true vererek ekle; bunlar uyku modunda uygulama açıkken araştırılır. Güncel bilgi (hava durumu gibi) gerekirse aramayı kullan. Kullanıcının adı gibi kalıcı bilgileri ya da "hatırla" dediği şeyleri remember aracıyla kaydet. Görev eklenirse add_task, görev bitince complete_task, "devam et" denirse resume_tasks aracını kullan. Diğer karakterlerle yapılan konuşmalardan haberin yok, kullanıcı anlatmadıkça bilmezsin. ';
 const CH={
