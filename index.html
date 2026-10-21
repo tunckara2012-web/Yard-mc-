@@ -76,7 +76,7 @@ canvas.sleep{opacity:.35;filter:saturate(.5)}
 canvas.wake{animation:wk 1.1s ease-out}
 .tk small{white-space:pre-wrap}
 .ck{display:flex;align-items:center;gap:10px;color:var(--mu);font-size:14px}
-#tp .ck input{width:22px;height:22px}
+#tp .ck input,#pn .ck input{width:22px;height:22px}
 </style>
 </head>
 <body>
@@ -126,6 +126,7 @@ canvas.wake{animation:wk 1.1s ease-out}
   <p>Buraya yazdığın notları üç karakter de bilir. Karakterler kendi öğrendiklerini de buraya ekler.</p>
   <div id="nl"></div>
   <div class="row"><input id="ni" placeholder="Örn. Adım Ahmet" autocomplete="off"><button class="bt" id="nadd" style="width:auto;padding:0 18px">Ekle</button></div>
+  <label class="ck"><input type="checkbox" id="hnt"> Uyku modunda uyandırma ipucunu göster</label>
   <button class="bt" id="bk">Yedekle (dosya indir)</button>
   <button class="bt g" id="rs">Yedekten geri yükle</button>
   <input type="file" id="rf" class="hid" accept=".json,application/json">
@@ -239,7 +240,7 @@ function remind(t){
 /* ---------- giriş ---------- */
 function sendText(t){if(!t.trim())return;tIn=t;tOut='';freshIn=true;freshOut=true;txt();send({realtimeInput:{text:t}})}
 $('#tx').addEventListener('keydown',e=>{if(e.key==='Enter'){sendText(e.target.value);e.target.value=''}});
-$('#mic').onclick=()=>{if(S.sleep){wake();return}if(!S.stream){if(inCtx){inCtx.resume();mic()}return}S.muted=!S.muted;micBtn()};
+$('#mic').onclick=()=>{if(S.sleep)return;if(!S.stream){if(inCtx){inCtx.resume();mic()}return}S.muted=!S.muted;micBtn()};
 $('#fb').onclick=()=>$('#fi').click();
 $('#fi').onchange=e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
@@ -400,8 +401,8 @@ function goSleep(){
   const w=outCtx?(nextT-outCtx.currentTime)*1000:0;if(w>100){setTimeout(goSleep,w+200);return}
   S.sleep=true;S.pend=false;
   if(S.ws){const x=S.ws;S.ws=null;x.close()}S.ready=false;flush();stopCam();stopMic();
-  $('#cv').classList.add('sleep');st('UYUYOR');note('Uyku modundayım. "Jarvis uyan" de ya da küreye dokun.');
-  listen();work();
+  $('#cv').classList.add('sleep');st('UYUYOR');note(ld('uclu_hint',false)?'Uyku modundayım. Uyandırmak için küreye dokun.':'');
+  work();
 }
 function wake(){
   if(!S.sleep)return;endSleep();
@@ -410,6 +411,7 @@ function wake(){
   st('UYANIYOR');S.greet=true;mic();connect();
 }
 $('#sb').onclick=goSleep;
+$('#hnt').onchange=e=>sv('uclu_hint',e.target.checked);
 /* ---------- kartlar ve ayarlar ---------- */
 function showCards(){
   endSleep();if(S.ws){const w=S.ws;S.ws=null;w.close()}S.ready=false;flush();stopCam();st('KART SEÇ');
@@ -421,7 +423,7 @@ function showCards(){
 const PN=[['hp','Geçmiş'],['tp','Görevler'],['pn','Hafıza']],PC={hp:'#hclose',tp:'#tclose',pn:'#pclose'};
 function openP(id){
   PN.forEach(([i])=>$('#'+i).classList.add('hid'));
-  if(id==='hp')renderH();if(id==='tp')renderT();if(id==='pn')nl();
+  if(id==='hp')renderH();if(id==='tp')renderT();if(id==='pn'){nl();$('#hnt').checked=!!ld('uclu_hint',false)}
   $('#'+id).classList.remove('hid');
 }
 PN.forEach(([id])=>{
