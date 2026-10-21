@@ -375,12 +375,14 @@ async function research(x){
   return 'Araştırma yapılamadı: '+err.message;
 }
 async function work(){
-  S.abort=false;
-  for(const x of tasks().filter(y=>y.st==='active'&&y.rs&&!y.res)){
-    if(S.abort)break;
+  S.abort=false;const q=tasks().filter(y=>y.st==='active'&&y.rs&&!y.res);
+  for(let i=0;i<q.length;i++){
+    const x=q[i];if(S.abort)break;
+    if(S.sleep){st('UYUYOR · ARAŞTIRIYOR '+(i+1)+'/'+q.length);tIn='';tOut='Araştırılıyor: '+x.t;txt()}
     const t=await research(x),a=tasks(),y=a.find(z=>z.id===x.id);
     if(y){y.res=t;y.st='done';saveT(a);S.done.push(x.t+': '+t.slice(0,500))}
   }
+  if(S.sleep&&q.length){st('UYUYOR · GÖREVLER TAMAM');note(ld('uclu_hint',false)?'Uyku modundayım. Uyandırmak için küreye dokun.':'')}
 }
 function listen(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
