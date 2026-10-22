@@ -100,7 +100,7 @@ canvas.wake{animation:wk 1.1s ease-out}
   <input id="tx" placeholder="Yaz…" autocomplete="off" enterkeyhint="send">
   <button class="rb" id="mic" aria-label="Mikrofonu aç/kapat">●</button>
 </footer>
-<input type="file" id="fi" class="hid" accept="image/*,.txt,.md,.csv,.json">
+<input type="file" id="fi" class="hid" multiple accept="image/*,.txt,.md,.csv,.json">
 <div id="ov">
   <h1>Ses açık mı?</h1>
   <p id="ovp">Gemini anahtarını bir kez gir. Telefonunda saklanır, başka yere gitmez.</p>
@@ -245,20 +245,29 @@ function sendText(t){if(!t.trim())return;tIn=t;tOut='';freshIn=true;freshOut=tru
 $('#tx').addEventListener('keydown',e=>{if(e.key==='Enter'){sendText(e.target.value);e.target.value=''}});
 $('#mic').onclick=()=>{if(S.sleep)return;if(!S.stream){if(inCtx){inCtx.resume();mic()}return}S.muted=!S.muted;micBtn()};
 $('#fb').onclick=()=>$('#fi').click();
-$('#fi').onchange=e=>{
-  const f=e.target.files[0];e.target.value='';if(!f)return;
-  const r=new FileReader();
-  if(f.type.startsWith('image/')){
-    r.onload=()=>{const im=new Image();im.onload=()=>{
-      const k=Math.min(1,1280/Math.max(im.width,im.height)),c=document.createElement('canvas');
-      c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);
-      send({realtimeInput:{video:{data:c.toDataURL('image/jpeg',.85).split(',')[1],mimeType:'image/jpeg'}}});
-      sendText('Bu görseli incele ve sorularını çöz.')};im.src=r.result};
-    r.readAsDataURL(f);
-  }else{
-    r.onload=()=>sendText('Dosya ('+f.name+'):\n'+String(r.result).slice(0,30000)+'\nBunu incele ve sorularını çöz.');
-    r.readAsText(f);
+$('#fi').onchange=async e=>{
+  const fs=[...e.target.files];e.target.value='';if(!fs.length)return;
+  if(!S.ready){note('Önce bir kart seç ve bağlanmasını bekle.');return}
+  let im=0,tx=0;
+  for(const f of fs){
+    try{
+      if(f.type.startsWith('image/')){
+        const u=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(f)});
+        const g=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=u});
+        const k=Math.min(1,1280/Math.max(g.width,g.height)),c=document.createElement('canvas');
+        c.width=g.width*k;c.height=g.height*k;c.getContext('2d').drawImage(g,0,0,c.width,c.height);
+        send({realtimeInput:{video:{data:c.toDataURL('image/jpeg',.85).split(',')[1],mimeType:'image/jpeg'}}});im++;
+        await new Promise(r=>setTimeout(r,400));
+      }else{
+        const t=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result));r.onerror=no;r.readAsText(f)});
+        send({realtimeInput:{text:'[SİSTEM] Kullanıcının gönderdiği dosya ('+f.name+'):\n'+t.slice(0,30000)}});tx++;
+      }
+    }catch(x){}
   }
+  const p=[];if(im)p.push(im+' fotoğraf');if(tx)p.push(tx+' dosya');
+  if(!p.length)return;
+  tIn='';tOut=p.join(' ve ')+' gönderildi.';freshIn=freshOut=true;txt();
+  send({realtimeInput:{text:'[SİSTEM] Kullanıcı '+p.join(' ve ')+' gönderdi. Şimdi hiçbir şeyi inceleme, çözme ya da yorumlama. Yalnızca kendi tarzında kısaca "Aldım, ne yapayım?" de ve talimat bekle.'}});
 };
 let dirty=false;
 function nl(){
@@ -419,7 +428,7 @@ function wake(){
 $('#sb').onclick=goSleep;
 $('#hnt').onchange=e=>sv('uclu_hint',e.target.checked);
 /* ---------- laflar ve kontrol ---------- */
-const VER='21 Ekim · v3';
+const VER='21 Ekim · v4';
 function rl(){
   const L=$('#ll'),a=ld('uclu_quotes',[]);L.innerHTML='';
   if(!a.length){L.textContent='Henüz kayıt yok.';return}
