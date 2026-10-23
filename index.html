@@ -325,10 +325,16 @@ const tasks=()=>ld('uclu_tasks',[]),SL={active:'Devam ediyor',paused:'Duraklatı
 function saveT(a){sv('uclu_tasks',a);renderT()}
 const hm=t=>new Date(t).toLocaleTimeString('tr',{hour:'2-digit',minute:'2-digit'});
 function timeInfo(){const n=Date.now(),k=tasks().filter(x=>x.st!=='done'&&x.due).map(x=>x.t+' ('+(x.st==='paused'?'duraklatıldı':Math.max(0,Math.round((x.due-n)/60000))+' dk kaldı, saat '+hm(x.due))+')');return 'Şu an saat '+hm(n)+'.'+(k.length?' Süreli görevler: '+k.join('; ')+'.':'')}
-function arm(x){clearTimeout(timers[x.id]);if(x.st==='active'&&x.due)timers[x.id]=setTimeout(()=>remind((x.k==='r'?'Zamanlayıcı doldu: ':'Görev zamanı: ')+x.t),Math.max(500,x.due-Date.now()))}
+/* ---------- telefon (APK): uygulama kapalıyken de bildirim ---------- */
+const NAT=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()),LN=NAT?window.Capacitor.Plugins.LocalNotifications:null;
+const nid=s=>{let h=7;for(const c of String(s))h=(h*31+c.charCodeAt(0))%2147483000;return h+1};
+async function nInit(){if(!LN)return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
+function nSched(x){if(!LN||!(x.due>Date.now()+1000))return;try{LN.schedule({notifications:[{id:nid(x.id),title:'Jarvis',body:(x.k==='r'?'Zamanlayıcı doldu: ':'Görev zamanı: ')+x.t,schedule:{at:new Date(x.due),allowWhileIdle:true}}]}).catch(()=>{})}catch(e){}}
+function nCancel(id){if(!LN)return;try{LN.cancel({notifications:[{id:nid(id)}]}).catch(()=>{})}catch(e){}}
+function arm(x){clearTimeout(timers[x.id]);if(x.st==='active'&&x.due){timers[x.id]=setTimeout(()=>remind((x.k==='r'?'Zamanlayıcı doldu: ':'Görev zamanı: ')+x.t),Math.max(500,x.due-Date.now()));nSched(x)}else nCancel(x.id)}
 function addTask(t,d,m,k,rs){const a=tasks(),x={id:Date.now()+Math.random().toString(36).slice(2,5),t:String(t).slice(0,120),d:String(d||'').slice(0,300),due:m>0?Date.now()+m*60000:0,st:'active',k:k||'',rs:rs?1:0};a.push(x);saveT(a);arm(x)}
 function setSt(id,st){const a=tasks(),x=a.find(y=>y.id===id);if(!x)return;if(st==='paused'&&x.due)x.rem=Math.max(0,x.due-Date.now());if(st==='active'&&x.rem!=null){x.due=Date.now()+x.rem;delete x.rem}if(st==='paused')x.m=1;else delete x.m;x.st=st;saveT(a);arm(x);if(st==='done')clearTimeout(timers[id])}
-function delT(id){clearTimeout(timers[id]);saveT(tasks().filter(x=>x.id!==id))}
+function delT(id){clearTimeout(timers[id]);nCancel(id);saveT(tasks().filter(x=>x.id!==id))}
 function resume(auto){const a=tasks();a.forEach(x=>{if(x.st==='paused'&&!(auto&&x.m)){x.st='active';if(x.rem!=null){x.due=Date.now()+x.rem;delete x.rem}arm(x)}});saveT(a);$('#rq').classList.add('hid')}
 function pauseAll(){stopCam()}
 function ask(p){$('#rqt').textContent='Duran görevler: '+p.map(x=>x.t).join(', ')+'. Devam edeyim mi?';$('#rq').classList.remove('hid')}
@@ -368,7 +374,7 @@ async function cam(face){
 $('#cb').onclick=()=>{if(S.cam)stopCam();else $('#cq').classList.toggle('hid')};
 $('#cqx').onclick=()=>$('#cq').classList.add('hid');
 document.querySelectorAll('#cq [data-f]').forEach(b=>b.onclick=()=>{$('#cq').classList.add('hid');cam(b.dataset.f)});
-resume(true);tasks().forEach(arm);renderT();
+nInit();resume(true);tasks().forEach(arm);renderT();
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 /* ---------- uyku modu ---------- */
