@@ -196,8 +196,9 @@ function connect(){
   S.ready=false;S.up=false;st('BAĞLANIYOR');
   const c=CH[S.ch],ws=new WebSocket(URL_+encodeURIComponent(S.key));S.ws=ws;
   const tools=[{functionDeclarations:[{name:'set_reminder',description:'Belirli dakika sonra kullanıcıya sesli hatırlatma yapar.',parameters:{type:'OBJECT',properties:{text:{type:'STRING',description:'Hatırlatılacak şey'},minutes:{type:'NUMBER',description:'Kaç dakika sonra'}},required:['text','minutes']}},{name:'remember',description:'Kullanıcı hakkındaki kalıcı bir bilgiyi (adı gibi) not eder.',parameters:{type:'OBJECT',properties:{note:{type:'STRING'}},required:['note']}},{name:'add_task',description:'Göreve ekler. minutes verilirse o kadar dakika sonra hatırlatır.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'},detail:{type:'STRING'},minutes:{type:'NUMBER'},research:{type:'BOOLEAN',description:'İnternet araştırması gerektiriyorsa true'}},required:['title']}},{name:'complete_task',description:'Başlığı eşleşen görevi bitti yapar.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'}},required:['title']}},{name:'resume_tasks',description:'Duraklatılmış görevleri devam ettirir.'},{name:'get_time',description:'Şu anki saati ve süreli görevlerin kalan süresini verir.'},{name:'sleep_mode',description:'Kullanıcı uyku moduna geçmeni isterse çağır.'},{name:'save_quote',description:'Kullanıcı bir lafı kaydetmeni isterse çağır.',parameters:{type:'OBJECT',properties:{text:{type:'STRING'}},required:['text']}},{name:'get_quotes',description:'Kullanıcının kaydettiği lafları verir.'}]}];
+  if(NAT)tools[0].functionDeclarations.push(...ND);
   if(!S.noSearch)tools.push({googleSearch:{}});
-  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+c.s+ctx()}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
+  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+(NAT?NBASE:'')+c.s+ctx()}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
   ws.onmessage=async e=>{
     if(S.ws!==ws)return;
     let t=e.data;if(t instanceof Blob)t=await t.text();
@@ -224,6 +225,7 @@ function connect(){
         if(f.name==='sleep_mode'){S.pend=true;res='Tamam. Kısa bir onay cümlesi söyle, sonra uykuya geçilecek.';setTimeout(()=>{if(S.pend)goSleep()},9000)}
         if(f.name==='complete_task'){const k=String(f.args.title||'').toLowerCase(),x=tasks().find(y=>y.st!=='done'&&y.t.toLowerCase().includes(k));if(x)setSt(x.id,'done')}
         if(f.name==='resume_tasks')resume();
+        if(NM[f.name]||f.name==='get_location')res=await nCall(f);
         rs.push({id:f.id,name:f.name,response:{result:res}});
       }
       send({toolResponse:{functionResponses:rs}});
@@ -324,10 +326,37 @@ let timers={};
 const tasks=()=>ld('uclu_tasks',[]),SL={active:'Devam ediyor',paused:'Duraklatıldı',done:'Bitti'};
 function saveT(a){sv('uclu_tasks',a);renderT()}
 const hm=t=>new Date(t).toLocaleTimeString('tr',{hour:'2-digit',minute:'2-digit'});
-function timeInfo(){const n=Date.now(),k=tasks().filter(x=>x.st!=='done'&&x.due).map(x=>x.t+' ('+(x.st==='paused'?'duraklatıldı':Math.max(0,Math.round((x.due-n)/60000))+' dk kaldı, saat '+hm(x.due))+')');return 'Şu an saat '+hm(n)+'.'+(k.length?' Süreli görevler: '+k.join('; ')+'.':'')}
+function timeInfo(){const n=Date.now(),k=tasks().filter(x=>x.st!=='done'&&x.due).map(x=>x.t+' ('+(x.st==='paused'?'duraklatıldı':Math.max(0,Math.round((x.due-n)/60000))+' dk kaldı, saat '+hm(x.due))+')');return 'Bugün '+new Date(n).toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' ('+new Date(n-new Date(n).getTimezoneOffset()*60000).toISOString().slice(0,10)+'), şu an saat '+hm(n)+'.'+(k.length?' Süreli görevler: '+k.join('; ')+'.':'')}
 /* ---------- telefon (APK): uygulama kapalıyken de bildirim ---------- */
 const NAT=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()),LN=NAT?window.Capacitor.Plugins.LocalNotifications:null;
 const nid=s=>{let h=7;for(const c of String(s))h=(h*31+c.charCodeAt(0))%2147483000;return h+1};
+const JN=NAT?window.Capacitor.Plugins.JarvisNative:null;
+const NM={set_alarm:'setAlarm',set_timer:'setTimer',open_app:'openApp',youtube_search:'youtubeSearch',maps_search:'mapsSearch',media_control:'mediaControl',set_volume:'setVolume',flashlight:'flashlight',device_status:'deviceStatus',add_calendar_event:'addCalendarEvent',list_calendar:'listCalendar'};
+const ND=[
+{name:'set_alarm',description:'Telefonun saat uygulamasına alarm kurar. Tarih gerekiyorsa önce get_time ile bugünü öğren.',parameters:{type:'OBJECT',properties:{hour:{type:'NUMBER',description:'0 ile 23 arası saat'},minute:{type:'NUMBER'},label:{type:'STRING'}},required:['hour']}},
+{name:'set_timer',description:'Telefonun saat uygulamasına zamanlayıcı kurar.',parameters:{type:'OBJECT',properties:{minutes:{type:'NUMBER'},seconds:{type:'NUMBER'},label:{type:'STRING'}}}},
+{name:'open_app',description:'Telefondaki bir uygulamayı adıyla açar (YouTube, Spotify, Ayarlar gibi).',parameters:{type:'OBJECT',properties:{name:{type:'STRING'}},required:['name']}},
+{name:'youtube_search',description:'YouTube uygulamasında arama sonuçlarını açar. Videoyu kullanıcı seçer.',parameters:{type:'OBJECT',properties:{query:{type:'STRING'}},required:['query']}},
+{name:'maps_search',description:'Harita uygulamasında bir yeri ya da adresi açar.',parameters:{type:'OBJECT',properties:{query:{type:'STRING'}},required:['query']}},
+{name:'media_control',description:'Çalan müziği yönetir.',parameters:{type:'OBJECT',properties:{action:{type:'STRING',description:'play_pause, play, pause, next ya da previous'}},required:['action']}},
+{name:'set_volume',description:'Medya ses seviyesini yüzde olarak ayarlar.',parameters:{type:'OBJECT',properties:{percent:{type:'NUMBER',description:'0 ile 100 arası'}},required:['percent']}},
+{name:'flashlight',description:'El fenerini açar ya da kapatır.',parameters:{type:'OBJECT',properties:{on:{type:'BOOLEAN'}},required:['on']}},
+{name:'device_status',description:'Pil yüzdesini, Wi-Fi ve Bluetooth durumunu verir.'},
+{name:'add_calendar_event',description:'Takvimde dolu bir etkinlik formu açar, kullanıcı Kaydet düğmesine basmalıdır. Önce get_time ile bugünün tarihini öğren.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'},start:{type:'STRING',description:'Yerel saatle YYYY-MM-DDTHH:MM'},duration_minutes:{type:'NUMBER'}},required:['title','start']}},
+{name:'list_calendar',description:'Önümüzdeki günlerdeki takvim etkinliklerini okur.',parameters:{type:'OBJECT',properties:{days:{type:'NUMBER'}}}},
+{name:'get_location',description:'Kullanıcının yaklaşık konumunu (semt, ilçe, il) verir.'}
+];
+const NBASE='Telefon uygulamasındasın ve ek araçların var; bu kurallar önceki zamanlayıcı kuralının yerine geçer. Kullanıcı alarm isterse set_alarm, zamanlayıcı isterse set_timer aracını çağır; bunlar telefonun saat uygulamasına kurulur. Yalnızca hatırlat ya da uyar derse ya da görev eklerse set_reminder ve add_task kullan. Uygulama açma, YouTube, harita, müzik, ses, el feneri, pil ve bağlantı durumu, takvim ve konum için ilgili aracı çağır; araç çağırmadan yaptım deme. Araç hata dönerse bunu dürüstçe söyle. Takvim formunu kullanıcı kendisi kaydeder. Saat, tarih ve gün bilgisi için get_time kullan. ';
+function getLoc(){return new Promise(r=>{if(!navigator.geolocation)return r('Konum bu cihazda desteklenmiyor.');navigator.geolocation.getCurrentPosition(async p=>{const la=p.coords.latitude,lo=p.coords.longitude;let n='';try{const g=await JN.placeName({lat:String(la),lon:String(lo)});n=g.message}catch(e){}r((n?'Konum: '+n+'. ':'')+'Koordinat: '+la.toFixed(3)+', '+lo.toFixed(3))},e=>r('Konum alınamadı: '+(e.message||'izin verilmedi')),{enableHighAccuracy:false,timeout:10000})})}
+async function nCall(f){
+  if(!JN)return 'Bu özellik sadece telefondaki uygulamada çalışır.';
+  try{
+    if(f.name==='get_location')return await getLoc();
+    const p={};for(const k in(f.args||{}))p[k]=String(f.args[k]);
+    const r=await JN[NM[f.name]](p);
+    return(r&&r.message)||'Tamam.';
+  }catch(e){return 'Başarısız oldu: '+((e&&e.message)||e)}
+}
 async function nInit(){if(!LN)return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
 function nSched(x){if(!LN||!(x.due>Date.now()+1000))return;try{LN.schedule({notifications:[{id:nid(x.id),title:'Jarvis',body:(x.k==='r'?'Zamanlayıcı doldu: ':'Görev zamanı: ')+x.t,schedule:{at:new Date(x.due),allowWhileIdle:true}}]}).catch(()=>{})}catch(e){}}
 function nCancel(id){if(!LN)return;try{LN.cancel({notifications:[{id:nid(id)}]}).catch(()=>{})}catch(e){}}
