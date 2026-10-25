@@ -390,7 +390,8 @@ $('#tkb').onclick=()=>{renderT();$('#tp').classList.remove('hid')};
 $('#tclose').onclick=()=>$('#tp').classList.add('hid');
 $('#tadd').onclick=()=>{const t=$('#tt').value.trim();if(!t)return;addTask(t,$('#td').value.trim(),+$('#tm').value||0,'',1);$('#tt').value=$('#td').value=$('#tm').value=''};
 $('#rqy').onclick=resume;$('#rqn').onclick=()=>$('#rq').classList.add('hid');
-document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseAll();else{tasks().forEach(arm);if(inCtx){keep();if($('#cs').classList.contains('hid')&&!S.sleep){S.greet=true;S.ready?greet():connect()}}}});
+function bgStop(){if(S.sleep||S.bgKeep)return;if(S.ws){const x=S.ws;S.ws=null;x.close()}S.ready=false;S.up=false;flush();stopMic()}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseAll();bgStop()}else{tasks().forEach(arm);if(inCtx){keep();if($('#cs').classList.contains('hid')&&!S.sleep){S.greet=true;S.ready?greet():connect();if(!S.stream)mic()}}}});
 addEventListener('pagehide',pauseAll);
 
 /* ---------- kamera ---------- */

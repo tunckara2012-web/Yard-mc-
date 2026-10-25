@@ -19,6 +19,8 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.BatteryManager;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.AlarmClock;
 import android.provider.CalendarContract;
 import android.view.KeyEvent;
@@ -69,6 +71,17 @@ public class JarvisNative extends Plugin {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private static final long DELAY_MS = 2800;
+
+    private void later(final Intent a, final Intent fallback) {
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!launch(a) && fallback != null) launch(fallback);
+            }
+        }, DELAY_MS);
     }
 
     @PluginMethod
@@ -141,8 +154,10 @@ public class JarvisNative extends Plugin {
             return;
         }
         Intent i = pm.getLaunchIntentForPackage(best.activityInfo.packageName);
-        if (i != null && launch(i)) {
-            ok(call, bestLabel + " açıldı");
+        if (i != null) {
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            later(i, null);
+            ok(call, bestLabel + " birkaç saniye içinde açılacak");
         } else {
             call.reject("Uygulama açılamadı");
         }
@@ -153,25 +168,17 @@ public class JarvisNative extends Plugin {
         String q = call.getString("query", "");
         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(q)));
         i.setPackage("com.google.android.youtube");
-        if (!launch(i)) {
-            Intent j = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(q)));
-            if (!launch(j)) {
-                call.reject("YouTube açılamadı");
-                return;
-            }
-        }
-        ok(call, "YouTube araması açıldı: " + q + ". Videoyu kullanıcının seçmesi gerekir.");
+        Intent j = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(q)));
+        later(i, j);
+        ok(call, "YouTube araması birkaç saniye içinde açılacak: " + q + ". Videoyu kullanıcının seçmesi gerekir.");
     }
 
     @PluginMethod
     public void mapsSearch(PluginCall call) {
         String q = call.getString("query", "");
         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q)));
-        if (launch(i)) {
-            ok(call, "Haritada açıldı: " + q);
-        } else {
-            call.reject("Harita uygulaması açılamadı");
-        }
+        later(i, null);
+        ok(call, "Harita birkaç saniye içinde açılacak: " + q);
     }
 
     @PluginMethod
