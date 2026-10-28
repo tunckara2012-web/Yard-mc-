@@ -77,6 +77,12 @@ canvas.wake{animation:wk 1.1s ease-out}
 .tk small{white-space:pre-wrap}
 .ck{display:flex;align-items:center;gap:10px;color:var(--mu);font-size:14px}
 #tp .ck input,#pn .ck input{width:22px;height:22px}
+#sty{position:fixed;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);max-height:52vh;overflow:auto;background:rgba(14,19,27,.97);border:1px solid var(--c);border-radius:16px;padding:14px;z-index:4;display:flex;flex-direction:column;gap:10px}
+.scn{border-radius:12px;padding:12px;border:1px solid #2a3544}
+.scn b{display:block;margin-bottom:4px}
+#stq{font-weight:600}
+#stch{display:flex;flex-direction:column;gap:8px}
+#stch .bt,#sty .bt{max-width:none;width:100%}
 </style>
 </head>
 <body>
@@ -84,6 +90,7 @@ canvas.wake{animation:wk 1.1s ease-out}
   <div class="tabs" id="tabs"></div>
   <button class="ic hid" id="hb" aria-label="Geçmiş">🕘</button>
   <button class="ic hid" id="tkb" aria-label="Görevler">☑</button>
+  <button class="ic hid" id="stb" aria-label="Hikaye">📖</button>
   <button class="tab" id="gear" aria-label="Ayarlar">⚙ AYARLAR</button>
 </header>
 <main>
@@ -110,6 +117,7 @@ canvas.wake{animation:wk 1.1s ease-out}
 </div>
 <div id="cq" class="hid"><button class="bt" data-f="user">Ön kamera</button><button class="bt" data-f="environment">Arka kamera</button><button class="bt g" id="cqx">Vazgeç</button></div>
 <div id="cs" class="hid"></div>
+<div id="sty" class="hid"><div id="stsc"></div><div id="stq"></div><div id="stch"></div><button class="bt g" id="stx">Gizle</button></div>
 <div id="lp" class="hid"><h2>Unutmak istemediklerim</h2><p>Güzel laflar ve espriler burada durur. Jarvis'e "bunu kaydet" dersin. Sadece sen sorunca bakar.</p><div id="ll"></div><div class="row"><input id="li" placeholder="Bir şey yaz…" autocomplete="off"><button class="bt" id="ladd" style="width:auto;padding:0 18px">Ekle</button></div><button class="bt" id="lclose">Kapat</button></div>
 <div id="kp" class="hid"><h2>Kontrol</h2><div id="kl"></div><button class="bt" id="ktest">Araştırma bağlantısını dene</button><button class="bt" id="kclose">Kapat</button></div>
 <div id="hp" class="hid"><h2>Geçmiş</h2><div id="hl"></div><button class="bt g" id="hclr2">Geçmişi sil</button><button class="bt" id="hclose">Kapat</button></div>
@@ -127,6 +135,10 @@ canvas.wake{animation:wk 1.1s ease-out}
   <p>Buraya yazdığın notları üç karakter de bilir. Karakterler kendi öğrendiklerini de buraya ekler.</p>
   <div id="nl"></div>
   <div class="row"><input id="ni" placeholder="Örn. Adım Ahmet" autocomplete="off"><button class="bt" id="nadd" style="width:auto;padding:0 18px">Ekle</button></div>
+  <h2 style="margin-top:8px">Ultron hikâyesi</h2>
+  <p id="stinfo"></p>
+  <button class="bt" id="stgo">Hikâyeyi başlat</button>
+  <button class="bt g" id="strst">Hikâyeyi sıfırla</button>
   <label class="ck"><input type="checkbox" id="hnt"> Uyku modunda uyandırma ipucunu göster</label>
   <button class="bt" id="bk">Yedekle (dosya indir)</button>
   <button class="bt g" id="rs">Yedekten geri yükle</button>
@@ -197,8 +209,9 @@ function connect(){
   const c=CH[S.ch],ws=new WebSocket(URL_+encodeURIComponent(S.key));S.ws=ws;
   const tools=[{functionDeclarations:[{name:'set_reminder',description:'Belirli dakika sonra kullanıcıya sesli hatırlatma yapar.',parameters:{type:'OBJECT',properties:{text:{type:'STRING',description:'Hatırlatılacak şey'},minutes:{type:'NUMBER',description:'Kaç dakika sonra'}},required:['text','minutes']}},{name:'remember',description:'Kullanıcı hakkındaki kalıcı bir bilgiyi (adı gibi) not eder.',parameters:{type:'OBJECT',properties:{note:{type:'STRING'}},required:['note']}},{name:'add_task',description:'Göreve ekler. minutes verilirse o kadar dakika sonra hatırlatır.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'},detail:{type:'STRING'},minutes:{type:'NUMBER'},research:{type:'BOOLEAN',description:'İnternet araştırması gerektiriyorsa true'}},required:['title']}},{name:'complete_task',description:'Başlığı eşleşen görevi bitti yapar.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'}},required:['title']}},{name:'resume_tasks',description:'Duraklatılmış görevleri devam ettirir.'},{name:'get_time',description:'Şu anki saati ve süreli görevlerin kalan süresini verir.'},{name:'sleep_mode',description:'Kullanıcı uyku moduna geçmeni isterse çağır.'},{name:'save_quote',description:'Kullanıcı bir lafı kaydetmeni isterse çağır.',parameters:{type:'OBJECT',properties:{text:{type:'STRING'}},required:['text']}},{name:'get_quotes',description:'Kullanıcının kaydettiği lafları verir.'}]}];
   if(NAT)tools[0].functionDeclarations.push(...ND);
+  if(ST().on)tools[0].functionDeclarations.push(...STORY_TOOLS);
   if(!S.noSearch)tools.push({googleSearch:{}});
-  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+(NAT?NBASE:'')+c.s+ctx()}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
+  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+(NAT?NBASE:'')+c.s+ctx()+stCtx()}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
   ws.onmessage=async e=>{
     if(S.ws!==ws)return;
     let t=e.data;if(t instanceof Blob)t=await t.text();
@@ -226,6 +239,7 @@ function connect(){
         if(f.name==='complete_task'){const k=String(f.args.title||'').toLowerCase(),x=tasks().find(y=>y.st!=='done'&&y.t.toLowerCase().includes(k));if(x)setSt(x.id,'done')}
         if(f.name==='resume_tasks')resume();
         if(NM[f.name]||f.name==='get_location')res=await nCall(f);
+        if(SN[f.name])res=stTool(f);
         rs.push({id:f.id,name:f.name,response:{result:res}});
       }
       send({toolResponse:{functionResponses:rs}});
@@ -357,6 +371,126 @@ async function nCall(f){
     return(r&&r.message)||'Tamam.';
   }catch(e){return 'Başarısız oldu: '+((e&&e.message)||e)}
 }
+/* ---------- ULTRON HİKAYESİ ---------- */
+const STORY_PING_ID=777001;
+const MISYON=[
+ {hook:'Efendim, acil: Ultron Demirova şehrinin güç santralini ele geçirdi. Şehir karanlığa gömülüyor.',t:'Ultron, kurgusal Demirova şehrinin güç santralini ele geçirdi. Şehir yavaş yavaş karanlığa gömülüyor, hastane yedek jeneratörle idare ediyor. Müdahale fikirleri: santrale uzaktan sızıp Ultron\'un kodunu kesmek, yedek şebekeyi açıp hastaneye öncelik vermek, santrali tamamen kapatmak. Her seçeneğin bir bedeli olsun.'},
+ {hook:'Efendim, Ultron Mavi Kule\'nin güvenlik ve asansör sistemlerini ele geçirdi. Binada hâlâ insanlar var.',t:'Ultron, kurgusal Mavi Kule adlı gökdelenin güvenlik ve asansör sistemlerini ele geçirdi. Binada hâlâ insanlar var ve yapı tehlikede. Müdahale fikirleri: kurtarma ekibini yönlendirmek, binanın sistemlerine sızıp Ultron\'u durdurmak, tahliyeyi önceliklendirmek. Her seçeneğin bir bedeli olsun. Şiddeti ayrıntılı anlatma.'},
+ {hook:'Efendim, Ultron Çelikliman\'daki liman vinçlerini kontrol ediyor. Hemen müdahale etmeliyiz.',t:'Ultron, kurgusal Çelikliman limanındaki otomatik vinçleri ve konteyner sistemlerini kontrol ediyor. Konteynerler kontrolsüz hareket ediyor, çalışanlar tahliye ediliyor. Müdahale fikirleri: vinç ağına sızmak, limanı elektriksiz bırakmak, çalışanları tahliye edip sonra sistemi ele geçirmek. Her seçeneğin bir bedeli olsun.'}
+];
+const MOOD={fire:['🔥','#ff7a3a'],dark:['🌑','#7f8bd1'],water:['🌊','#3aa8ff'],power:['⚡','#ffd23a'],calm:['🌆','#6fe0b4']};
+const STORY_TOOLS=[
+ {name:'show_scene',description:'Hikayedeki sahneyi ekranda kart olarak gösterir.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'},text:{type:'STRING',description:'1-2 cümlelik sahne'},mood:{type:'STRING',description:'fire, dark, water, power ya da calm'}},required:['title','text']}},
+ {name:'show_choices',description:'Ekranda kullanıcıya 2-3 seçenek düğmesi gösterir.',parameters:{type:'OBJECT',properties:{question:{type:'STRING'},options:{type:'ARRAY',items:{type:'STRING'}}},required:['question','options']}},
+ {name:'mission_stage',description:'Görev aşamasını günceller: 1 öğrenme, 2 müdahale, 3 sonuç.',parameters:{type:'OBJECT',properties:{stage:{type:'NUMBER'},summary:{type:'STRING',description:'Şu ana kadar olanların kısa özeti'}},required:['stage','summary']}},
+ {name:'complete_mission',description:'Görevi bitirir ve bir sonraki görevi planlar.',parameters:{type:'OBJECT',properties:{summary:{type:'STRING'}},required:['summary']}},
+ {name:'plan_next_mission',description:'Yalnızca 3. görevden sonra kullan: bir sonraki görevin bildirim metnini ve temasını yazar.',parameters:{type:'OBJECT',properties:{hook:{type:'STRING',description:'Bildirimde görünecek kısa mesaj'},theme:{type:'STRING'}},required:['hook','theme']}}
+];
+const SN={show_scene:1,show_choices:1,mission_stage:1,complete_mission:1,plan_next_mission:1};
+const ST=()=>Object.assign({on:false,gun:1,asama:0,aktif:false,basladi:false,ozet:'',bitti:[],ping:0,pingMetin:'',sonraki:null},ld('uclu_story',{}));
+const stSave=s=>sv('uclu_story',s);
+function stClamp(ts){const d=new Date(ts),h=d.getHours();if(h>=10&&h<22)return ts;if(h>=22)d.setDate(d.getDate()+1);d.setHours(10,Math.floor(Math.random()*120),0,0);return d.getTime()}
+function stPlanPing(first){
+  const s=ST();let ts;
+  if(first)ts=stClamp(Date.now()+(30+Math.random()*90)*60000);
+  else{const d=new Date();d.setDate(d.getDate()+1);d.setHours(10+Math.floor(Math.random()*11),Math.floor(Math.random()*60),0,0);ts=d.getTime()}
+  const m=MISYON[s.gun-1];
+  s.ping=ts;s.pingMetin=m?m.hook:((s.sonraki&&s.sonraki.hook)||'Efendim, Ultron yeni bir plan hazırlıyor. Haberiniz olsun.');
+  stSave(s);stSchedule(s);return s;
+}
+function stSchedule(s){
+  if(!LN||!s.ping||s.ping<Date.now()+1000)return;
+  try{LN.schedule({notifications:[{id:STORY_PING_ID,title:'JARVIS',body:s.pingMetin,schedule:{at:new Date(s.ping),allowWhileIdle:true},extra:{story:1}}]}).catch(()=>{})}catch(e){}
+}
+function stCtx(){
+  const s=ST();if(!s.on||!S.storyGo||S.ch!=='kahya')return'';
+  const m=MISYON[s.gun-1],tema=m?m.t:((s.sonraki&&s.sonraki.theme)||'Ultron yeni, kurgusal bir plan yaptı. Temayı sen uydur.');
+  let t='\nHİKAYE MODU AKTİF (bu bir kurgu oyunudur). Sen JARVIS\'sin ve Ultron kötü bir plan yaptı. Görev '+s.gun+': '+tema;
+  if(s.bitti.length)t+='\nÖnceki görevler: '+s.bitti.slice(-3).map(x=>'Görev '+x.gun+': '+x.ozet).join(' | ');
+  if(s.ozet)t+='\nBu görevde şu ana kadar: '+s.ozet;
+  t+='\nKurallar: Yerler, kişiler ve olaylar tamamen uydurmadır, gerçek yer ya da olay kullanma. Şiddeti ayrıntılı anlatma. Konuşmaların kısa olsun (2-3 cümle). Görevin üç aşaması vardır: 1) Öğrenme: kullanıcı soru sorar, sen kurgusal ayrıntıları uydurup cevaplarsın. 2) Müdahale: kullanıcı yeterince öğrenince show_choices ile 3 müdahale seçeneği göster, her birinin bir bedeli olsun. 3) Sonuç: seçimin sonucunu anlat. Aşama değişince mission_stage çağır. Önemli sahneleri show_scene ile göster. Kullanıcı Engelleme derse Ultron kazanır ama görev yine de bir sonuca bağlanır. Sonuç anlatıldıktan sonra mutlaka complete_mission çağır, çağırmadan görev bitti deme. İstersen sonuçta "kurtarma ekibi yolda, 20 dakika sonra haber vereceğim" deyip set_reminder ile 20 dakika sonrasına hatırlatma kurabilirsin. Kullanıcı hikâye dışı bir şey isterse normal JARVIS gibi yardım et, sonra hikâyeye dön. Kullanıcı seçenekleri sesle de söyleyebilir.';
+  if(s.gun>3)t+=' Bu görevin bildirimini sen planladın; görev bitince plan_next_mission ile bir sonraki görevin bildirim metnini ve temasını yaz.';
+  return t;
+}
+function stGreet(){
+  const s=ST();
+  if(!s.basladi){s.basladi=true;stSave(s);send({realtimeInput:{text:'[SİSTEM] Uygulama açıldı ve hikâye görevi başladı. Bu mesajda normal selamlama kuralının dışına çık: önce "Evet efendim, nasıl yardımcı olabilirim?" de, hemen ardından Ultron\'un planını anlat, show_scene çağır ve show_choices ile "Engelle" ve "Engelleme" seçeneklerini göster.'}})}
+  else send({realtimeInput:{text:'[SİSTEM] Uygulama yeniden açıldı, görev sürüyor. Özet: '+(s.ozet||'henüz özet yok')+'. Önce "Evet efendim, nasıl yardımcı olabilirim?" de, sonra kaldığın yerden kısaca devam et.'}});
+}
+function stScene(a){
+  const m=MOOD[a.mood]||MOOD.dark,d=document.createElement('div'),b=document.createElement('b'),p=document.createElement('span');
+  d.className='scn';d.style.borderColor=m[1];d.style.background='linear-gradient(135deg,'+m[1]+'33,transparent)';
+  b.textContent=m[0]+' '+String(a.title||'');p.textContent=String(a.text||'');d.append(b,p);
+  $('#stsc').replaceChildren(d);$('#sty').classList.remove('hid');
+}
+function stChoices(a){
+  const L=$('#stch');L.replaceChildren();$('#stq').textContent=String(a.question||'');
+  (Array.isArray(a.options)?a.options:[]).slice(0,4).forEach(o=>{
+    const b=document.createElement('button');b.className='bt';b.textContent=String(o);
+    b.onclick=()=>{L.replaceChildren();$('#stq').textContent='';sendText(String(o))};L.append(b);
+  });
+  $('#sty').classList.remove('hid');
+}
+function stTool(f){
+  const a=f.args||{};let s=ST();
+  try{
+    if(f.name==='show_scene'){stScene(a);return'Sahne gösterildi.'}
+    if(f.name==='show_choices'){stChoices(a);return'Seçenekler ekranda, kullanıcının seçmesini bekle.'}
+    if(f.name==='mission_stage'){s.asama=Math.round(+a.stage)||s.asama;s.ozet=String(a.summary||s.ozet).slice(0,600);stSave(s);return'Kaydedildi.'}
+    if(f.name==='plan_next_mission'){s.sonraki={hook:String(a.hook||'').slice(0,160),theme:String(a.theme||'').slice(0,300)};stSave(s);return'Planlandı.'}
+    if(f.name==='complete_mission'){
+      s.bitti.push({gun:s.gun,ozet:String(a.summary||'').slice(0,300)});s.bitti=s.bitti.slice(-10);
+      s.gun++;s.asama=0;s.aktif=false;s.basladi=false;s.ozet='';stSave(s);S.storyGo=false;
+      const n=stPlanPing(false);
+      stScene({title:'Görev tamamlandı',text:'Sonraki haber yaklaşık '+new Date(n.ping).toLocaleString('tr',{weekday:'long',hour:'2-digit',minute:'2-digit'})+' civarında gelecek.',mood:'calm'});
+      $('#stch').replaceChildren();$('#stq').textContent='';stRender();
+      return'Görev bitti, sonraki bildirim planlandı.';
+    }
+  }catch(e){return'Başarısız: '+e}
+  return'ok';
+}
+function stRender(){
+  const s=ST();$('#stb').classList.toggle('hid',!s.on);
+  const I=$('#stinfo'),B=$('#stgo');if(!I)return;
+  if(!s.on){I.textContent='Hikâye kapalı. Başlatırsan ilk haber 30-120 dakika içinde bir bildirimle gelir, sonra günde bir görev olur.';B.textContent='Hikâyeyi başlat'}
+  else if(s.aktif){I.textContent='Görev '+s.gun+' sürüyor.';B.textContent='Göreve devam et'}
+  else{I.textContent='Görev '+s.gun+' için haber '+(s.ping?new Date(s.ping).toLocaleString('tr',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'yakında')+' civarında gelecek.';B.textContent='Görevi şimdi başlat'}
+}
+function stLaunch(){
+  const s=ST();if(!s.on)return;
+  s.aktif=true;stSave(s);S.storyGo=true;S.ch='kahya';paint();tIn=tOut='';txt();stRender();
+  $('#pn').classList.add('hid');
+  if(inCtx&&!S.silent){$('#cs').classList.add('hid');S.greet=true;connect()}
+  else{const o=$('#ovp');if(o)o.textContent='Ultron\'dan haber var. Sesi aç, sonra JARVIS kartını seç.'}
+}
+function stBanner(){
+  const s=ST();
+  stScene({title:'Ultron\'dan haber var',text:s.pingMetin||'Yeni bir görev seni bekliyor.',mood:'dark'});
+  const L=$('#stch');L.replaceChildren();$('#stq').textContent='';
+  const b=document.createElement('button');b.className='bt';b.textContent='Görevi başlat';b.onclick=()=>stLaunch();L.append(b);
+}
+function stInit(){
+  try{
+    const s=ST();
+    if(s.on&&s.aktif){S.storyGo=true;S.ch='kahya';paint()}
+    stRender();
+    if(LN)LN.addListener('localNotificationActionPerformed',ev=>{try{if(ev.notification&&ev.notification.extra&&ev.notification.extra.story)stLaunch()}catch(e){}});
+    if(s.on&&!s.aktif&&s.ping){if(s.ping>Date.now())stSchedule(s);else stBanner()}
+    $('#stb').onclick=()=>$('#sty').classList.toggle('hid');
+    $('#stx').onclick=()=>$('#sty').classList.add('hid');
+    $('#stgo').onclick=()=>{
+      const t=ST();
+      if(!t.on){t.on=true;t.gun=1;stSave(t);stPlanPing(true);stRender();nInit()}
+      else stLaunch();
+    };
+    $('#strst').onclick=()=>{
+      if(!confirm('Ultron hikâyesi sıfırlansın mı?'))return;
+      try{localStorage.removeItem('uclu_story')}catch(e){}
+      S.storyGo=false;if(LN)try{LN.cancel({notifications:[{id:STORY_PING_ID}]}).catch(()=>{})}catch(e){}
+      $('#sty').classList.add('hid');stRender();
+    };
+  }catch(e){}
+}
 async function nInit(){if(!LN)return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
 function nSched(x){if(!LN||!(x.due>Date.now()+1000))return;try{LN.schedule({notifications:[{id:nid(x.id),title:'Jarvis',body:(x.k==='r'?'Zamanlayıcı doldu: ':'Görev zamanı: ')+x.t,schedule:{at:new Date(x.due),allowWhileIdle:true}}]}).catch(()=>{})}catch(e){}}
 function nCancel(id){if(!LN)return;try{LN.cancel({notifications:[{id:nid(id)}]}).catch(()=>{})}catch(e){}}
@@ -369,6 +503,7 @@ function pauseAll(){stopCam()}
 function ask(p){$('#rqt').textContent='Duran görevler: '+p.map(x=>x.t).join(', ')+'. Devam edeyim mi?';$('#rq').classList.remove('hid')}
 function greet(){
   S.greet=false;const rep=S.report;S.report='';
+  if(S.storyGo&&!S.silent&&S.ch==='kahya'){stGreet();return}
   if(S.silent){if(rep)note('Tamamlanan görevler:\n'+rep);return}
   if(rep)send({realtimeInput:{text:'[SİSTEM] Uyku modundayken şu görevleri araştırıp tamamladın:\n'+rep+'\nÖnce kısaca "Verdiğiniz görevleri tamamladım." de, sonra sonuçları kısaca özetle. Kendi tarzında konuş.'}});
   else if(S.ch==='kahya')send({realtimeInput:{text:'[SİSTEM] Uygulama açıldı.'}});
@@ -404,7 +539,7 @@ async function cam(face){
 $('#cb').onclick=()=>{if(S.cam)stopCam();else $('#cq').classList.toggle('hid')};
 $('#cqx').onclick=()=>$('#cq').classList.add('hid');
 document.querySelectorAll('#cq [data-f]').forEach(b=>b.onclick=()=>{$('#cq').classList.add('hid');cam(b.dataset.f)});
-nInit();resume(true);tasks().forEach(arm);renderT();
+nInit();resume(true);tasks().forEach(arm);renderT();stInit();
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 /* ---------- uyku modu ---------- */
