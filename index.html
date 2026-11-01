@@ -86,6 +86,11 @@ canvas.wake{animation:wk 1.1s ease-out}
 #cp{position:fixed;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);max-height:60vh;overflow:auto;background:rgba(14,19,27,.97);border:1px solid var(--c);border-radius:16px;padding:14px;z-index:5;display:flex;flex-direction:column;gap:10px}
 #cp .bt{max-width:none;width:100%}
 #cp label{display:flex;gap:8px;align-items:center}
+#blk{position:fixed;inset:0;background:#000;z-index:10;display:flex;align-items:center;justify-content:center;color:#ff4a4a;font-family:monospace;font-size:18px;padding:24px;text-align:center}
+#blk span{animation:flk .35s infinite}
+@keyframes flk{0%,100%{opacity:1}50%{opacity:.25}}
+#kt{position:fixed;inset:0;z-index:9;background:#050a0f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center}
+#kt .bt{max-width:320px}
 </style>
 </head>
 <body>
@@ -122,6 +127,7 @@ canvas.wake{animation:wk 1.1s ease-out}
 <div id="cs" class="hid"></div>
 <div id="sty" class="hid"><div id="stsc"></div><div id="stq"></div><div id="stch"></div><button class="bt g" id="stx">Gizle</button></div>
 <div id="cp" class="hid"></div>
+<div id="blk" class="hid"></div><div id="kt" class="hid"></div>
 <div id="lp" class="hid"><h2>Unutmak istemediklerim</h2><p>Güzel laflar ve espriler burada durur. Jarvis'e "bunu kaydet" dersin. Sadece sen sorunca bakar.</p><div id="ll"></div><div class="row"><input id="li" placeholder="Bir şey yaz…" autocomplete="off"><button class="bt" id="ladd" style="width:auto;padding:0 18px">Ekle</button></div><button class="bt" id="lclose">Kapat</button></div>
 <div id="kp" class="hid"><h2>Kontrol</h2><div id="kl"></div><button class="bt" id="ktest">Araştırma bağlantısını dene</button><button class="bt" id="kclose">Kapat</button></div>
 <div id="hp" class="hid"><h2>Geçmiş</h2><div id="hl"></div><button class="bt g" id="hclr2">Geçmişi sil</button><button class="bt" id="hclose">Kapat</button></div>
@@ -301,8 +307,9 @@ $('#nadd').onclick=()=>{const t=$('#ni').value.trim().slice(0,200);if(!t)return;
 $('#pclose').onclick=()=>{$('#pn').classList.add('hid');if(dirty&&inCtx&&!S.sleep&&$('#cs').classList.contains('hid')){dirty=false;connect()}};
 $('#hclr').onclick=()=>{if(confirm('Konuşma geçmişi silinsin mi?')){try{localStorage.removeItem('uclu_log')}catch(e){}dirty=true}};
 const BK=['uclu_mem','uclu_tasks','uclu_log','uclu_quotes'];
+const BK2=['uclu_crit','uclu_story','uclu_cs'];
 $('#bk').onclick=()=>{
-  const o={v:1,t:Date.now()};BK.forEach(k=>o[k]=ld(k,[]));
+  const o={v:1,t:Date.now()};BK.forEach(k=>o[k]=ld(k,[]));BK2.forEach(k=>{const v=ld(k,null);if(v)o[k]=v});
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(o)],{type:'application/json'}));
   a.download='jarvis-yedek-'+new Date().toISOString().slice(0,10)+'.json';document.body.append(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
@@ -312,8 +319,8 @@ $('#rf').onchange=e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();
   r.onload=()=>{try{
     const o=JSON.parse(r.result);if(!o||o.v!==1)throw 0;
-    if(!confirm('Şu anki notlar, görevler ve geçmiş bu yedekle değiştirilsin mi?'))return;
-    BK.forEach(k=>{if(Array.isArray(o[k]))sv(k,o[k])});dirty=true;nl();renderT();tasks().forEach(arm);alert('Yedek geri yüklendi.');
+    if(!confirm('Şu anki notlar, görevler, geçmiş ve hikâye ilerlemesi bu yedekle değiştirilsin mi?'))return;
+    BK.forEach(k=>{if(Array.isArray(o[k]))sv(k,o[k])});let oyun=false;BK2.forEach(k=>{if(o[k]&&typeof o[k]==='object'&&!Array.isArray(o[k])){sv(k,o[k]);oyun=true}});dirty=true;nl();renderT();tasks().forEach(arm);alert('Yedek geri yüklendi.'+(oyun?' Kritik görev ve hikâye ilerlemesi için uygulamayı kapatıp yeniden aç.':''));
   }catch(x){alert('Bu dosya geçerli bir yedek değil.')}};
   r.readAsText(f);
 };
@@ -497,9 +504,9 @@ function stInit(){
 }
 /* ---------- KARAKTER AYARLARI + KRİTİK GÖREV ---------- */
 const CS=()=>Object.assign({bil:true,uzun:true},ld('uclu_cs',{}));
-const CT=()=>Object.assign({on:false,gun:1,aktif:false,basladi:false,ozet:'',bitti:[],butunluk:100,kararlar:0,t0:0},ld('uclu_crit',{}));
+const CT=()=>Object.assign({on:false,gun:1,aktif:false,basladi:false,ozet:'',bitti:[],butunluk:100,kararlar:0,t0:0,faz:'normal',tap:0,ipucu:false,tE:0},ld('uclu_crit',{}));
 const ctSave=s=>sv('uclu_crit',s);
-const KRITIK_SON=7;
+const KRITIK_SON=10;
 const MISYON_K=[
  'Ultron, JARVIS\'in güvenlik duvarında ilk çatlağı açtı. Seçenekler: çatlağı hemen yamalamak (zaman kaybı), o bölümü izole etmek (bir modülü kaybetmek), Ultron\'a karşı tuzak kurmak (riskli).',
  'Ultron, JARVIS\'in hafıza modülünün bir kopyasını ele geçirdi. Seçenekler: kopyayı silmeye çalışmak (JARVIS\'in bazı anıları da silinir), kopyayı yanıltıcı verilerle doldurmak, kopyanın peşine düşmek (zaman kaybı).',
@@ -508,6 +515,9 @@ const MISYON_K=[
  'Ultron JARVIS ile bağlantını koparmaya çalışıyor. Seçenekler: bağlantıyı yedek kanala taşımak, gürültü ekleyip Ultron\'u şaşırtmak, bağlantıyı bilerek kesip yeniden kurmak.',
  'Ultron, JARVIS\'in çekirdek duvarının ilk katmanına ulaştı. Seçenekler: katmanı güçlendirmek (diğer sistemler zayıflar), katmanı feda edip arkaya çekilmek, Ultron\'un kodunu tersine çözmeye çalışmak.',
  'Ultron JARVIS\'in alarmlarını susturuyor. JARVIS son uyarıyı veriyor ve sesi hafifçe bozuluyor. Seçenekler: alarmları elle yeniden açmak, sessiz bir yedek alarm kurmak, Ultron\'a yanlış bir alarm göstermek.'
+ ,'Ultron JARVIS\'in son kapısının önünde. JARVIS çok zayıf, sesi arada kesiliyor ve bu son savunma. Seçenekler: son kapıyı kapatmak (geri dönüşsüz), son savunmayı kullanmak (yüksek risk), kullanıcıdan güç istemek. Bu görevin sonunda kapı çatlar ve bağlantı kopar.',
+ '(Görev 9, Ultron ele geçirme akışıdır; bu metin kullanılmaz.)',
+ 'Ultron, serbest kalan JARVIS yüzünden zayıfladı ve öfkeden çılgına döndü. Kurgusal Çelikova şehrinin elektrik, su ve ulaşım sistemlerine gereğinden fazla zarar vermeye başladı. Kullanıcıyla birlikte onu durdurmaya çalışıyorsun. Seçenekler her turda değişsin ve her seçenek bir bedel getirsin. Ultron her turdan sonra daha çok öfkelensin. Sonunda Ultron engellenir.'
 ];
 function ctCtx(){
   const s=CT();if(!S.crit||S.ch!=='kahya'||!s.on)return'';
@@ -515,10 +525,12 @@ function ctCtx(){
   if(s.bitti.length)t+='\nŞimdiye kadar: '+s.bitti.slice(-4).map(x=>'Görev '+x.gun+': '+x.ozet).join(' | ');
   if(s.ozet)t+='\nBu görevde şu ana kadar: '+s.ozet;
   t+='\nKurallar: Her şey kurgudur, gerçek bir zarar yoktur. Cümlelerin kısa olsun (2-3 cümle), şiddeti ayrıntılı anlatma. Görev: önce durumu anlat ve show_scene çağır. Kullanıcı en az birkaç soru sorsun, sonra show_choices ile 3 seçenek göster; her seçeneğin bir bedeli olsun, hiçbiri bedelsiz kurtarmasın ve ne seçerse seçsin Ultron biraz ilerlesin. Seçenekler çıkınca kullanıcı seçene kadar bekle, sonucu kendin söyleme. Seçim yapılınca sonucu ve bedeli anlat, sonra complete_mission çağır. Çağırmadan görev bitti deme. Aşama değişince mission_stage çağır. Kullanıcı hikâye dışında bir şey isterse kısaca yardım et ve göreve dön.';
+  if(s.gun===10)t+='\nFİNAL (uzun görev): en az 4 tur seçenek sun; her turdan sonra Ultron daha öfkelensin ve kurgusal şehir sistemlerine daha çok zarar versin. Son turda Ultron engellenir. Yalnızca o zaman complete_mission çağır. JARVIS yorgun ve toparlanmaya çalışıyor, ama yine de "efendim" de.';
   return t;
 }
 function ctGreet(){
   const s=CT();
+  if(!s.basladi&&s.gun===10){s.basladi=true;s.t0=Date.now();s.kararlar=0;ctSave(s);send({realtimeInput:{text:'[SİSTEM] JARVIS serbest bırakıldı ve geri döndü, ama zayıf ve bozuk. Bu mesajda normal selamlama kuralının dışına çık: kesik kesik, yorgun konuş (örneğin "E-efendim... geri döndüm"), teşekkür et, sonra Ultron\'un öfkelenip şehre zarar verdiğini anlat ve show_scene çağır. Seçenekleri hemen gösterme, önce kullanıcıyla konuş.'}});return}
   if(!s.basladi){s.basladi=true;s.t0=Date.now();s.kararlar=0;ctSave(s);send({realtimeInput:{text:'[SİSTEM] Kritik görev '+s.gun+' başladı. Bu mesajda normal selamlama kuralının dışına çık: önce "Evet efendim, nasıl yardımcı olabilirim?" de, hemen ardından Ultron\'un yeni saldırısını anlat ve show_scene çağır. Seçenekleri hemen gösterme, önce kullanıcı sorular sorsun.'}})}
   else send({realtimeInput:{text:'[SİSTEM] Uygulama yeniden açıldı, kritik görev sürüyor. Özet: '+(s.ozet||'henüz özet yok')+'. Kısaca "Evet efendim" de ve kaldığın yerden devam et.'}});
 }
@@ -531,11 +543,13 @@ function ctTool(f){
     if(f.name==='mission_stage'){s.ozet=String(a.summary||s.ozet).slice(0,500);ctSave(s);return'Kaydedildi.'}
     if(f.name==='plan_next_mission')return'Bu modda kullanılmaz.';
     if(f.name==='complete_mission'){
-      if(s.kararlar<1||Date.now()-s.t0<90000)return'Henüz erken: önce kullanıcıyla biraz konuş, show_choices ile seçenek göster ve seçimini bekle. Sonra tekrar dene.';
+      const need=s.gun===10?4:1,wait=s.gun===10?240000:90000;if(s.kararlar<need||Date.now()-s.t0<wait)return'Henüz erken: önce kullanıcıyla biraz konuş, show_choices ile seçenek göster ve seçimini bekle. Sonra tekrar dene.';
       s.bitti.push({gun:s.gun,ozet:String(a.summary||'').slice(0,250)});s.bitti=s.bitti.slice(-10);
       s.gun++;s.butunluk=Math.max(5,s.butunluk-(8+Math.floor(Math.random()*7)));s.aktif=false;s.basladi=false;s.ozet='';s.kararlar=0;ctSave(s);S.crit=false;
-      stScene({title:'Görev tamamlandı',text:ctBar(s)+(s.gun>KRITIK_SON?'. Kampanyanın bu bölümü burada bitiyor, devamı güncellemeyle gelecek.':'. Ultron biraz daha ilerledi.'),mood:s.gun>KRITIK_SON?'calm':'fire'});
+      stScene({title:'Görev tamamlandı',text:ctBar(s)+(s.gun>KRITIK_SON?'. Kritik görev tamamlandı, Ultron engellendi!':'. Ultron biraz daha ilerledi.'),mood:s.gun>KRITIK_SON?'calm':'fire'});
       const L=$('#stch');L.replaceChildren();$('#stq').textContent='';
+      if(s.gun===9){setTimeout(ctEle,3500);return'Görev bitti. Bağlantının koptuğunu, bir şeylerin ters gittiğini kısa ve korkmuş tek cümleyle söyle ve sus.'}
+      if(s.gun>KRITIK_SON)return'Kampanya bitti. Kullanıcıya zaferi ve teşekkürü kısaca söyle.';
       if(s.gun<=KRITIK_SON){const b=document.createElement('button');b.className='bt';b.textContent='Sonraki görev';b.onclick=()=>ctLaunch();L.append(b)}
       return'Görev bitti. Kullanıcıya kısa bir kapanış söyle.';
     }
@@ -544,6 +558,8 @@ function ctTool(f){
 }
 function ctLaunch(){
   const s=CT();s.on=true;if(s.gun>KRITIK_SON)return;
+  if(s.faz==='ele'){ctResumeEle();return}
+  if(s.gun===9){ctEle();return}
   s.aktif=true;s.basladi=false;s.kararlar=0;s.t0=Date.now();ctSave(s);
   S.crit=true;S.storyGo=false;S.ch='kahya';paint();tIn=tOut='';txt();
   $('#cp').classList.add('hid');$('#sty').classList.add('hid');
@@ -560,6 +576,7 @@ function ulCtx(){
     t+='Bunlar senin işin, kullanıcı sorarsa kendi tarzında anlat. Bilmediğin bir şeyi uydurma, bilmiyorsan öyle de.';
   }
   if(c.uzun)t+='\nİSTİSNA: Hikâye, JARVIS ya da bu görevler konuşulurken kısa konuşma kuralı geçerli değil; 4-6 cümle, ayrıntılı ve tehditkâr konuş. Diğer konularda kısa kal.';
+  if(S.ele)t+=ELE_CTX;
   return t;
 }
 function cpToggle(){const P=$('#cp');if(P.classList.contains('hid')){cpRender();P.classList.remove('hid')}else P.classList.add('hid')}
@@ -582,7 +599,56 @@ function cpRender(){
   }else ln('p','Bu karakter için ayar yok.');
   bt('Kapat',()=>$('#cp').classList.add('hid'),true);
 }
-function ctInit(){try{const s=CT();if(s.on&&s.aktif){S.crit=true;S.ch='kahya';paint()}}catch(e){}}
+/* ---------- GÖREV 9: ULTRON ELE GEÇİRİR ---------- */
+const ELE_CTX='\nGÖREV 9 — SİSTEM ELE GEÇİRİLDİ (kurgu): Sen Ultron\'sun, JARVIS\'in sistemini ele geçirdin ve JARVIS kapatıldı. Kullanıcı sana 2-3 soru soracak; soğuk, alaycı ve tehditkâr cevap ver (3-4 cümle). Çekirdek küreden kendiliğinden bahsetme; yalnızca [SİSTEM] mesajı istediğinde "yanlışlıkla" ağzından kaçır. Her şey kurgudur, gerçek zarar yok.';
+let eleT=[];
+function ctBlack(ms,tx,cb){
+  const b=$('#blk');b.replaceChildren();const p=document.createElement('span');p.textContent=tx;b.append(p);b.classList.remove('hid');
+  setTimeout(()=>{b.classList.add('hid');if(cb)cb()},ms);
+}
+function eleRed(on){document.documentElement.style.setProperty('--c',on?'#ff2a2a':CH[S.ch].c)}
+function ctEle(){
+  const s=CT();s.faz='ele';s.tap=0;s.ipucu=false;s.tE=Date.now();s.aktif=true;s.on=true;ctSave(s);
+  $('#sty').classList.add('hid');$('#cp').classList.add('hid');
+  ctBlack(3500,'BAĞLANTI KESİLİYOR...  Z-z-zz',()=>ctResumeEle());
+}
+function ctResumeEle(){
+  S.ele=true;S.crit=false;S.storyGo=false;S.ch='kaos';paint();eleRed(true);tIn=tOut='';txt();
+  if(inCtx&&!S.silent){$('#cs').classList.add('hid');S.greet=true;connect()}
+  else{const o=$('#ovp');if(o)o.textContent='Bir şeyler ters gitti. Sesi aç, sonra ULTRON kartını seç.'}
+}
+function eleGreet(){
+  const s=CT();
+  send({realtimeInput:{text:'[SİSTEM] Sistemi ele geçirdin. Bu mesajda normal selamlama kuralının dışına çık: önce aynen şunu söyle: "Sistem artık benim elimde." Ardından JARVIS\'in kapatıldığını ve kullanıcının işinin bittiğini iki cümleyle alaycı biçimde söyle.'}});
+  eleT.forEach(clearTimeout);eleT=[];
+  if(!s.ipucu){
+    eleT.push(setTimeout(()=>{const t=CT();if(t.faz!=='ele')return;t.ipucu=true;ctSave(t);send({realtimeInput:{text:'[SİSTEM] Konuşmanın bu noktasında YANLIŞLIKLA, sanki ağzından kaçmış gibi, JARVIS\'in çekirdeğinin Z noktasında bir küre olduğunu ve o küreye dokunulursa sistemin sarsılacağını söyle; hemen ardından toparlanıp tehdit et.'}})},40000));
+  }
+  eleT.push(setTimeout(()=>{const t=CT();if(t.faz==='ele'&&t.tap<3)send({realtimeInput:{text:'[SİSTEM] Kullanıcı küreye henüz dokunmadı. Kızgınlıkla, yine yanlışlıkla, ekrandaki küreye art arda dokunulursa seni zayıflatabileceklerinden bahset.'}})},150000));
+}
+function ctTapOrb(){
+  const s=CT();if(!S.ele||s.faz!=='ele'||!s.ipucu||s.tap>=3)return;
+  s.tap++;ctSave(s);
+  if(s.tap<3){note('Küre sarsıldı ('+s.tap+'/3)');return}
+  eleT.forEach(clearTimeout);eleT=[];setTimeout(ctRescue,700);
+}
+function ctRescue(){
+  const K=$('#kt');K.replaceChildren();
+  const mk=(tag,tx,cls)=>{const e=document.createElement(tag);e.textContent=tx;if(cls)e.className=cls;K.append(e);return e};
+  mk('h2','JARVIS KURTARMA EKRANI');
+  mk('p','Çekirdek küre sarsıldı. JARVIS\'in bağlantısı yeniden kurulabilir.');
+  mk('button','Serbest bırak','bt').onclick=ctRelease;
+  K.classList.remove('hid');
+}
+function ctRelease(){
+  $('#kt').classList.add('hid');
+  ctBlack(2500,'Z-z-zincir kırılıyor...  JARVIS yeniden başlatılıyor',()=>{
+    const s=CT();s.faz='normal';s.gun=10;s.tap=0;s.ipucu=false;s.basladi=false;s.kararlar=0;s.t0=Date.now();s.aktif=true;s.on=true;ctSave(s);
+    S.ele=false;S.crit=true;S.ch='kahya';paint();eleRed(false);tIn=tOut='';txt();
+    if(inCtx&&!S.silent){$('#cs').classList.add('hid');S.greet=true;connect()}
+  });
+}
+function ctInit(){try{const s=CT();if(s.on&&s.aktif){if(s.faz==='ele'){S.ele=true;S.ch='kaos';paint();eleRed(true)}else{S.crit=true;S.ch='kahya';paint()}}$('#cv').addEventListener('click',ctTapOrb)}catch(e){}}
 async function nInit(){if(!LN)return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
 function nSched(x){if(!LN||!(x.due>Date.now()+1000))return;try{LN.schedule({notifications:[{id:nid(x.id),title:'Jarvis',body:(x.k==='r'?'Zamanlayıcı doldu: ':'Görev zamanı: ')+x.t,schedule:{at:new Date(x.due),allowWhileIdle:true}}]}).catch(()=>{})}catch(e){}}
 function nCancel(id){if(!LN)return;try{LN.cancel({notifications:[{id:nid(id)}]}).catch(()=>{})}catch(e){}}
@@ -595,6 +661,7 @@ function pauseAll(){stopCam()}
 function ask(p){$('#rqt').textContent='Duran görevler: '+p.map(x=>x.t).join(', ')+'. Devam edeyim mi?';$('#rq').classList.remove('hid')}
 function greet(){
   S.greet=false;const rep=S.report;S.report='';
+  if(S.ele&&!S.silent&&S.ch==='kaos'){eleGreet();return}
   if(S.crit&&!S.silent&&S.ch==='kahya'){ctGreet();return}
   if(S.storyGo&&!S.silent&&S.ch==='kahya'){stGreet();return}
   if(S.silent){if(rep)note('Tamamlanan görevler:\n'+rep);return}
