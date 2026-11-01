@@ -91,6 +91,9 @@ canvas.wake{animation:wk 1.1s ease-out}
 @keyframes flk{0%,100%{opacity:1}50%{opacity:.25}}
 #kt{position:fixed;inset:0;z-index:9;background:#050a0f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center}
 #kt .bt{max-width:320px}
+#hud{position:fixed;top:calc(env(safe-area-inset-top,0px) + 58px);left:12px;right:12px;z-index:3;display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:12px;background:rgba(14,19,27,.88);border:1px solid var(--c);border-radius:12px;padding:6px 10px}
+#hud .bt{height:34px;width:auto;max-width:none;padding:0 12px;font-size:12px}
+#hud.hid{display:none}
 </style>
 </head>
 <body>
@@ -127,7 +130,7 @@ canvas.wake{animation:wk 1.1s ease-out}
 <div id="cs" class="hid"></div>
 <div id="sty" class="hid"><div id="stsc"></div><div id="stq"></div><div id="stch"></div><button class="bt g" id="stx">Gizle</button></div>
 <div id="cp" class="hid"></div>
-<div id="blk" class="hid"></div><div id="kt" class="hid"></div>
+<div id="hud" class="hid"><span id="hudt"></span><button class="bt hid" id="hudb">Görevi tamamla</button></div><div id="blk" class="hid"></div><div id="kt" class="hid"></div>
 <div id="lp" class="hid"><h2>Unutmak istemediklerim</h2><p>Güzel laflar ve espriler burada durur. Jarvis'e "bunu kaydet" dersin. Sadece sen sorunca bakar.</p><div id="ll"></div><div class="row"><input id="li" placeholder="Bir şey yaz…" autocomplete="off"><button class="bt" id="ladd" style="width:auto;padding:0 18px">Ekle</button></div><button class="bt" id="lclose">Kapat</button></div>
 <div id="kp" class="hid"><h2>Kontrol</h2><div id="kl"></div><button class="bt" id="ktest">Araştırma bağlantısını dene</button><button class="bt" id="kclose">Kapat</button></div>
 <div id="hp" class="hid"><h2>Geçmiş</h2><div id="hl"></div><button class="bt g" id="hclr2">Geçmişi sil</button><button class="bt" id="hclose">Kapat</button></div>
@@ -219,9 +222,10 @@ function connect(){
   const c=CH[S.ch],ws=new WebSocket(URL_+encodeURIComponent(S.key));S.ws=ws;
   const tools=[{functionDeclarations:[{name:'set_reminder',description:'Belirli dakika sonra kullanıcıya sesli hatırlatma yapar.',parameters:{type:'OBJECT',properties:{text:{type:'STRING',description:'Hatırlatılacak şey'},minutes:{type:'NUMBER',description:'Kaç dakika sonra'}},required:['text','minutes']}},{name:'remember',description:'Kullanıcı hakkındaki kalıcı bir bilgiyi (adı gibi) not eder.',parameters:{type:'OBJECT',properties:{note:{type:'STRING'}},required:['note']}},{name:'add_task',description:'Göreve ekler. minutes verilirse o kadar dakika sonra hatırlatır.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'},detail:{type:'STRING'},minutes:{type:'NUMBER'},research:{type:'BOOLEAN',description:'İnternet araştırması gerektiriyorsa true'}},required:['title']}},{name:'complete_task',description:'Başlığı eşleşen görevi bitti yapar.',parameters:{type:'OBJECT',properties:{title:{type:'STRING'}},required:['title']}},{name:'resume_tasks',description:'Duraklatılmış görevleri devam ettirir.'},{name:'get_time',description:'Şu anki saati ve süreli görevlerin kalan süresini verir.'},{name:'sleep_mode',description:'Kullanıcı uyku moduna geçmeni isterse çağır.'},{name:'save_quote',description:'Kullanıcı bir lafı kaydetmeni isterse çağır.',parameters:{type:'OBJECT',properties:{text:{type:'STRING'}},required:['text']}},{name:'get_quotes',description:'Kullanıcının kaydettiği lafları verir.'}]}];
   if(NAT)tools[0].functionDeclarations.push(...ND);
+  tools[0].functionDeclarations.push(UI_TOOL);
   if(ST().on||CT().on)tools[0].functionDeclarations.push(...STORY_TOOLS);
   if(!S.noSearch)tools.push({googleSearch:{}});
-  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+(NAT?NBASE:'')+c.s+ctx()+stCtx()+ctCtx()+ulCtx()}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
+  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+(NAT?NBASE:'')+UIBASE+c.s+ctx()+stCtx()+ctCtx()+ulCtx()}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
   ws.onmessage=async e=>{
     if(S.ws!==ws)return;
     let t=e.data;if(t instanceof Blob)t=await t.text();
@@ -250,6 +254,7 @@ function connect(){
         if(f.name==='resume_tasks')resume();
         if(NM[f.name]||f.name==='get_location')res=await nCall(f);
         if(SN[f.name])res=S.crit?ctTool(f):stTool(f);
+        if(f.name==='open_screen')res=uiOpen(f.args||{});
         rs.push({id:f.id,name:f.name,response:{result:res}});
       }
       send({toolResponse:{functionResponses:rs}});
@@ -535,23 +540,68 @@ function ctGreet(){
   else send({realtimeInput:{text:'[SİSTEM] Uygulama yeniden açıldı, kritik görev sürüyor. Özet: '+(s.ozet||'henüz özet yok')+'. Kısaca "Evet efendim" de ve kaldığın yerden devam et.'}});
 }
 function ctBar(s){return 'JARVIS bütünlüğü %'+s.butunluk}
+const ctNeed=s=>s.gun===10?{k:4,w:240000}:{k:1,w:90000};
+const ctHazir=s=>s.kararlar>=ctNeed(s).k&&Date.now()-s.t0>=ctNeed(s).w;
+function ctFinish(summary){
+  const s=CT();
+  s.bitti.push({gun:s.gun,ozet:String(summary||'Görev tamamlandı').slice(0,250)});s.bitti=s.bitti.slice(-10);
+  s.gun++;s.butunluk=Math.max(5,s.butunluk-(8+Math.floor(Math.random()*7)));s.aktif=false;s.basladi=false;s.ozet='';s.kararlar=0;s.nudge=0;s.sonSecim=0;ctSave(s);S.crit=false;
+  stScene({title:'Görev tamamlandı',text:ctBar(s)+(s.gun>KRITIK_SON?'. Kritik görev tamamlandı, Ultron engellendi!':'. Ultron biraz daha ilerledi.'),mood:s.gun>KRITIK_SON?'calm':'fire'});
+  const L=$('#stch');L.replaceChildren();$('#stq').textContent='';ctHud();
+  if(s.gun===9){setTimeout(ctEle,3500);return'Görev bitti. Bağlantının koptuğunu, bir şeylerin ters gittiğini kısa ve korkmuş tek cümleyle söyle ve sus.'}
+  if(s.gun>KRITIK_SON)return'Kampanya bitti. Kullanıcıya zaferi ve teşekkürü kısaca söyle.';
+  const b=document.createElement('button');b.className='bt';b.textContent='Sonraki görev';b.onclick=()=>ctLaunch();L.append(b);
+  return'Görev bitti. Kullanıcıya kısa bir kapanış söyle.';
+}
+function ctFallback(){
+  const s=CT();s.nudge=0;s.kararlar++;s.sonSecim=Date.now();ctSave(s);
+  stChoices({question:'Nasıl ilerleyelim efendim?',options:['Hızlı ama riskli yol','Yavaş ama güvenli yol','Ultron\'u oyalayıp zaman kazan']});
+}
+function ctHud(){
+  const h=$('#hud');if(!h)return;
+  const s=CT(),on=!!(S.crit&&s.on&&s.aktif&&s.faz==='normal');
+  h.classList.toggle('hid',!on);if(!on)return;
+  const n=ctNeed(s);
+  $('#hudt').textContent='Görev '+s.gun+'/10 · JARVIS %'+s.butunluk+' · Karar '+Math.min(s.kararlar,n.k)+'/'+n.k;
+  $('#hudb').classList.toggle('hid',!ctHazir(s));
+}
+function ctWatch(){
+  try{
+    const s=CT();
+    if(S.crit&&s.on&&s.aktif&&s.faz==='normal'&&S.ready){
+      const n=ctNeed(s),gecen=Date.now()-Math.max(s.t0,s.sonSecim||0),secVar=$('#stch').children.length>0;
+      if(s.kararlar<n.k&&!secVar){
+        if(!s.nudge&&gecen>110000){s.nudge=Date.now();ctSave(s);send({realtimeInput:{text:'[SİSTEM] Konuşma uzadı. Şimdi show_choices ile kullanıcıya 3 seçenek göster ve seçimini bekle.'}})}
+        else if(s.nudge&&Date.now()-s.nudge>45000)ctFallback();
+      }
+    }
+    ctHud();
+  }catch(e){}
+}
+const UI_TOOL={name:'open_screen',description:'Uygulamanın kendi ekranlarını açar.',parameters:{type:'OBJECT',properties:{name:{type:'STRING',description:'gorevler, gecmis, hafiza, kartlar, ayarlar ya da kapat'}},required:['name']}};
+const UIBASE='\nUygulamanın kendi ekranlarını (görevler, geçmiş, hafıza, kartlar, karakter ayarları) yalnızca open_screen aracıyla açabilirsin; aracı çağırmadan açıyorum deme. Yapamadığın bir şeyi yapıyormuş gibi davranma, dürüstçe söyle.';
+function uiOpen(a){
+  const n=String(a.name||'').toLowerCase();
+  try{
+    if(n==='gorevler'){openP('tp');return'Görevler açıldı.'}
+    if(n==='gecmis'){openP('hp');return'Geçmiş açıldı.'}
+    if(n==='hafiza'){openP('pn');return'Hafıza açıldı.'}
+    if(n==='kartlar'){showCards();return'Kartlar açıldı.'}
+    if(n==='ayarlar'){cpToggle();return'Karakter ayarları açıldı.'}
+    if(n==='kapat'){PN.forEach(([i])=>$('#'+i).classList.add('hid'));$('#cp').classList.add('hid');return'Ekranlar kapatıldı.'}
+  }catch(e){return'Açılamadı: '+e}
+  return'Bilinmeyen ekran. Seçenekler: gorevler, gecmis, hafiza, kartlar, ayarlar.';
+}
 function ctTool(f){
   const a=f.args||{};let s=CT();
   try{
     if(f.name==='show_scene'){stScene(a);return'Sahne gösterildi.'}
-    if(f.name==='show_choices'){s.kararlar++;ctSave(s);stChoices(a);return'Seçenekler ekranda. Kullanıcı seçene kadar bekle, sonuç anlatma.'}
+    if(f.name==='show_choices'){s.kararlar++;s.sonSecim=Date.now();s.nudge=0;ctSave(s);stChoices(a);return'Seçenekler ekranda. Kullanıcı seçene kadar bekle, sonuç anlatma.'}
     if(f.name==='mission_stage'){s.ozet=String(a.summary||s.ozet).slice(0,500);ctSave(s);return'Kaydedildi.'}
     if(f.name==='plan_next_mission')return'Bu modda kullanılmaz.';
     if(f.name==='complete_mission'){
-      const need=s.gun===10?4:1,wait=s.gun===10?240000:90000;if(s.kararlar<need||Date.now()-s.t0<wait)return'Henüz erken: önce kullanıcıyla biraz konuş, show_choices ile seçenek göster ve seçimini bekle. Sonra tekrar dene.';
-      s.bitti.push({gun:s.gun,ozet:String(a.summary||'').slice(0,250)});s.bitti=s.bitti.slice(-10);
-      s.gun++;s.butunluk=Math.max(5,s.butunluk-(8+Math.floor(Math.random()*7)));s.aktif=false;s.basladi=false;s.ozet='';s.kararlar=0;ctSave(s);S.crit=false;
-      stScene({title:'Görev tamamlandı',text:ctBar(s)+(s.gun>KRITIK_SON?'. Kritik görev tamamlandı, Ultron engellendi!':'. Ultron biraz daha ilerledi.'),mood:s.gun>KRITIK_SON?'calm':'fire'});
-      const L=$('#stch');L.replaceChildren();$('#stq').textContent='';
-      if(s.gun===9){setTimeout(ctEle,3500);return'Görev bitti. Bağlantının koptuğunu, bir şeylerin ters gittiğini kısa ve korkmuş tek cümleyle söyle ve sus.'}
-      if(s.gun>KRITIK_SON)return'Kampanya bitti. Kullanıcıya zaferi ve teşekkürü kısaca söyle.';
-      if(s.gun<=KRITIK_SON){const b=document.createElement('button');b.className='bt';b.textContent='Sonraki görev';b.onclick=()=>ctLaunch();L.append(b)}
-      return'Görev bitti. Kullanıcıya kısa bir kapanış söyle.';
+      if(!ctHazir(s))return'Henüz erken: önce kullanıcıyla biraz konuş, show_choices ile seçenek göster ve seçimini bekle. Sonra tekrar dene.';
+      return ctFinish(a.summary);
     }
   }catch(e){return'Başarısız: '+e}
   return'ok';
@@ -560,7 +610,7 @@ function ctLaunch(){
   const s=CT();s.on=true;if(s.gun>KRITIK_SON)return;
   if(s.faz==='ele'){ctResumeEle();return}
   if(s.gun===9){ctEle();return}
-  s.aktif=true;s.basladi=false;s.kararlar=0;s.t0=Date.now();ctSave(s);
+  const yeni=!s.aktif;s.aktif=true;if(yeni){s.basladi=false;s.kararlar=0;s.t0=Date.now();s.nudge=0;s.sonSecim=0}ctSave(s);
   S.crit=true;S.storyGo=false;S.ch='kahya';paint();tIn=tOut='';txt();
   $('#cp').classList.add('hid');$('#sty').classList.add('hid');
   if(inCtx&&!S.silent){$('#cs').classList.add('hid');S.greet=true;connect()}
@@ -648,7 +698,7 @@ function ctRelease(){
     if(inCtx&&!S.silent){$('#cs').classList.add('hid');S.greet=true;connect()}
   });
 }
-function ctInit(){try{const s=CT();if(s.on&&s.aktif){if(s.faz==='ele'){S.ele=true;S.ch='kaos';paint();eleRed(true)}else{S.crit=true;S.ch='kahya';paint()}}$('#cv').addEventListener('click',ctTapOrb)}catch(e){}}
+function ctInit(){try{const s=CT();if(s.on&&s.aktif){if(s.faz==='ele'){S.ele=true;S.ch='kaos';paint();eleRed(true)}else{S.crit=true;S.ch='kahya';paint()}}$('#cv').addEventListener('click',ctTapOrb);$('#hudb').onclick=()=>{const t=CT();if(!ctHazir(t))return;const m=ctFinish(t.ozet||'Görev tamamlandı.');send({realtimeInput:{text:'[SİSTEM] '+m}})};setInterval(ctWatch,4000)}catch(e){}}
 async function nInit(){if(!LN)return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
 function nSched(x){if(!LN||!(x.due>Date.now()+1000))return;try{LN.schedule({notifications:[{id:nid(x.id),title:'Jarvis',body:(x.k==='r'?'Zamanlayıcı doldu: ':'Görev zamanı: ')+x.t,schedule:{at:new Date(x.due),allowWhileIdle:true}}]}).catch(()=>{})}catch(e){}}
 function nCancel(id){if(!LN)return;try{LN.cancel({notifications:[{id:nid(id)}]}).catch(()=>{})}catch(e){}}
