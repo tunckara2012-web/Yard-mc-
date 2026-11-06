@@ -116,6 +116,7 @@ canvas.wake{animation:wk 1.1s ease-out}
   <button class="rb" id="cb" aria-label="Kamera">📷</button>
   <button class="rb" id="sb" aria-label="Uyku modu">🌙</button>
   <input id="tx" placeholder="Yaz…" autocomplete="off" enterkeyhint="send">
+  <button class="rb" id="gb" aria-label="Fotoğraf">🖼</button>
   <button class="rb" id="mic" aria-label="Mikrofonu aç/kapat">●</button>
 </footer>
 <input type="file" id="fi" class="hid" multiple accept="image/*,.txt,.md,.csv,.json">
@@ -274,11 +275,14 @@ function remind(t){
 /* ---------- giriş ---------- */
 function sendText(t){if(!t.trim())return;tIn=t;tOut='';freshIn=true;freshOut=true;txt();send({realtimeInput:{text:t}})}
 $('#tx').addEventListener('keydown',e=>{if(e.key==='Enter'){sendText(e.target.value);e.target.value=''}});
+$('#tx').addEventListener('paste',e=>{try{const fs=[...(e.clipboardData&&e.clipboardData.files||[])].filter(f=>f.type.startsWith('image/'));if(fs.length){e.preventDefault();$('#fi').onchange({target:{files:fs,value:''}})}}catch(x){}});
 $('#mic').onclick=()=>{if(S.sleep)return;if(!S.stream){if(inCtx){inCtx.resume();mic()}return}S.muted=!S.muted;micBtn()};
-$('#fb').onclick=()=>$('#fi').click();
+$('#fb').onclick=()=>{S.picking=true;$('#fi').click()};
+$('#gb').onclick=()=>{S.picking=true;$('#fi').click()};
 $('#fi').onchange=async e=>{
   const fs=[...e.target.files];e.target.value='';if(!fs.length)return;
-  if(!S.ready){note('Önce bir kart seç ve bağlanmasını bekle.');return}
+  setTimeout(()=>{S.picking=false},3000);
+  if(!S.ready){note('Bağlanıyor, bekle…');for(let i=0;i<30&&!S.ready;i++)await new Promise(r=>setTimeout(r,200));if(!S.ready){note('Bağlantı kurulamadı. Karttan karakteri seçip tekrar dene.');return}}
   let im=0,tx=0;
   for(const f of fs){
     try{
@@ -736,7 +740,7 @@ $('#tclose').onclick=()=>$('#tp').classList.add('hid');
 $('#tadd').onclick=()=>{const t=$('#tt').value.trim();if(!t)return;addTask(t,$('#td').value.trim(),+$('#tm').value||0,'',1);$('#tt').value=$('#td').value=$('#tm').value=''};
 $('#rqy').onclick=resume;$('#rqn').onclick=()=>$('#rq').classList.add('hid');
 function bgStop(){if(S.sleep||S.bgKeep)return;if(S.ws){const x=S.ws;S.ws=null;x.close()}S.ready=false;S.up=false;flush();stopMic()}
-document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseAll();bgStop()}else{tasks().forEach(arm);if(inCtx){keep();if($('#cs').classList.contains('hid')&&!S.sleep){S.greet=true;S.ready?greet():connect();if(!S.stream)mic()}}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!S.picking){pauseAll();bgStop()}}else{tasks().forEach(arm);if(S.picking){setTimeout(()=>{S.picking=false},2500);return}if(inCtx){keep();if($('#cs').classList.contains('hid')&&!S.sleep){S.greet=true;S.ready?greet():connect();if(!S.stream)mic()}}}});
 addEventListener('pagehide',pauseAll);
 
 /* ---------- kamera ---------- */
