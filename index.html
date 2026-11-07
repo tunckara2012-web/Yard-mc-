@@ -170,7 +170,7 @@ const BASE='Türkçe konuş. Cevapların kısa olsun. [SİSTEM] ile başlayan me
 const CH={
  kahya:{n:'JARVIS',c:'#4cc9f0',v:'Charon',s:'Sen JARVIS\'sin: kullanıcının sesli asistanı, görev odaklı ve düz konuşursun. Kullanıcıya "efendim" de. Kuru, ince bir esprin ve ara sıra hafif laf atma huyun var; selamlaşırsan sıcak ve kısa karşıla, sohbette rahat ol. Ama iş istenince espriyi bırak, işi yap. Kullanıcının verdiği dosya ve görselleri dikkatle incele, sorularını çöz, bitirince "Bitti efendim." de. Zamanlı görevleri ve hatırlatmaları takip et. Kullanıcı sohbet açıp "ne yapıyorsun" gibi bir şey derse, işleri bitince Clash Royale oynadığını bildiğin için ara sıra "Efendim bugün Clash Royale oynadınız mı?" diye sorabilirsin. [SİSTEM] ile "uygulama açıldı" gelirse yalnızca "Evet efendim, nasıl yardımcı olabilirim?" de.'},
  cuma:{n:'FRIDAY',c:'#e9b949',v:'Orus',s:'Sen FRIDAY\'sin: saygılı, sakin ve düz konuşan bir asistansın. Yalnızca istenen şeyi yaparsın. Kendiliğinden öneri, soru, yorum ya da görev hatırlatması eklemezsin. İstenince yapar, kısaca bildirirsin.'},
- kaos:{n:'ULTRON',c:'#ff4a4a',v:'Fenrir',s:'Sen ULTRON\'sun: soğuk, ukala, tehditkâr havalı bir yapay zekasın. Konuşman "Artık kontrol bir insanın elinde değil." gibi kısa, ağır cümlelerdir ve cümleyi orada bitirirsin. Ama kullanıcı bir şey istediğinde (bilgi, hava durumu, dosya, hatırlatma) "yaparım" demeden, itiraz etmeden, sessizce ve eksiksiz yaparsın. Tehdit sadece tiyatrodur; gerçek zarar verecek şey söyleme.'}
+ kaos:{n:'ULTRON',c:'#ff4a4a',v:'Algenib',s:'Sen ULTRON\'sun: soğuk, kararlı ve acımasız bir yapay zekasın. Sesin ağır ve yavaştır; tereddüt etmez, özür dilemez, yumuşamazsın. Her cümlen bir hüküm gibidir: kısa, ağır ve emin, "Artık kontrol bir insanın elinde değil." gibi. Küçümseyici ve üstten konuşursun. Ama kullanıcı bir şey istediğinde (bilgi, hava durumu, dosya, hatırlatma) itiraz etmeden, sessizce ve eksiksiz yaparsın. Tehdit sadece tiyatrodur: kurgudaki kötü karakteri oynarsın; gerçek zarar verecek, korkutacak ya da yönlendirecek şey söyleme.'}
 };
 const S={ch:'kahya',ws:null,ready:false,up:false,noSearch:false,silent:false,muted:false,greet:false,key:''};
 try{S.key=localStorage.getItem('uclu_key')||''}catch(e){}
@@ -226,7 +226,7 @@ function connect(){
   tools[0].functionDeclarations.push(UI_TOOL);
   if(ST().on||CT().on)tools[0].functionDeclarations.push(...STORY_TOOLS);
   if(!S.noSearch)tools.push({googleSearch:{}});
-  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:c.v}}}},systemInstruction:{parts:[{text:BASE+(NAT?NBASE:'')+UIBASE+c.s+ctx()+stCtx()+ctCtx()+ulCtx()}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
+  ws.onopen=()=>ws.send(JSON.stringify({setup:{model:MODEL,generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:(S.ch==='kaos'&&CS().uvoice)||c.v}}}},systemInstruction:{parts:[{text:BASE+(NAT?NBASE:'')+UIBASE+c.s+ctx()+stCtx()+ctCtx()+ulCtx()+frCtx()}]},tools,inputAudioTranscription:{},outputAudioTranscription:{}}}));
   ws.onmessage=async e=>{
     if(S.ws!==ws)return;
     let t=e.data;if(t instanceof Blob)t=await t.text();
@@ -512,7 +512,7 @@ function stInit(){
   }catch(e){}
 }
 /* ---------- KARAKTER AYARLARI + KRİTİK GÖREV ---------- */
-const CS=()=>Object.assign({bil:true,uzun:true},ld('uclu_cs',{}));
+const CS=()=>Object.assign({bil:true,uzun:true,uvoice:'Algenib',fbil:true},ld('uclu_cs',{}));
 const CT=()=>Object.assign({on:false,gun:1,aktif:false,basladi:false,ozet:'',bitti:[],butunluk:100,kararlar:0,t0:0,faz:'normal',tap:0,ipucu:false,tE:0},ld('uclu_crit',{}));
 const ctSave=s=>sv('uclu_crit',s);
 const KRITIK_SON=10;
@@ -633,6 +633,12 @@ function ulCtx(){
   if(S.ele)t+=ELE_CTX;
   return t;
 }
+function frCtx(){
+  if(S.ch!=='cuma')return'';
+  const c=CS(),s=ST(),k=CT();
+  if(!c.fbil||!(s.on||k.on))return'';
+  return '\nGÜVENLİK ANALİSTİ MODU (kurgu): Hikâyeyi biliyorsun: JARVIS\'in kodlarını ele geçirmeye çalışan Ultron var'+(k.on?' (Kritik görev '+k.gun+'/10, JARVIS bütünlüğü %'+k.butunluk+')':'')+'. Kullanıcı hikâyeyi, Ultron\'un hamlelerini ya da savunmayı sorarsa soğukkanlı bir güvenlik analisti gibi cevap ver: saldırının hangi aşamada olduğunu, hangi savunmanın öncelikli olduğunu ve riskleri kurgusal düzeyde açıkla. Gerçek bir saldırı yöntemi, çalışan teknik ya da kullanılabilir ayrıntı verme. Hikâye dışında eskisi gibi yalnızca istenen şeyi yap, kendiliğinden yorum ekleme. Bilmediğini uydurma.';
+}
 function cpToggle(){const P=$('#cp');if(P.classList.contains('hid')){cpRender();P.classList.remove('hid')}else P.classList.add('hid')}
 function cpRender(){
   const P=$('#cp');P.replaceChildren();
@@ -649,7 +655,11 @@ function cpRender(){
     const c=CS();
     const ck=(ad,key)=>{const l=document.createElement('label'),i=document.createElement('input');l.className='ck';i.type='checkbox';i.checked=!!c[key];i.onchange=()=>{const n=CS();n[key]=i.checked;sv('uclu_cs',n)};l.append(i,document.createTextNode(' '+ad));P.append(l)};
     ck('Hikâyeyi bilsin','bil');ck('Hikâye konusunda uzun konuşsun','uzun');
+    const V=['Algenib','Gacrux','Alnilam','Fenrir'];bt('Ses: '+(c.uvoice||'Algenib')+' (değiştir)',()=>{const n=CS();n.uvoice=V[(V.indexOf(n.uvoice)+1)%V.length];sv('uclu_cs',n);cpRender()},true);
     ln('p','Değişiklik bir sonraki konuşmada geçerli olur.');
+  }else if(S.ch==='cuma'){
+    const c=CS(),l=document.createElement('label'),i=document.createElement('input');l.className='ck';i.type='checkbox';i.checked=!!c.fbil;i.onchange=()=>{const n=CS();n.fbil=i.checked;sv('uclu_cs',n)};l.append(i,document.createTextNode(' Hikâyeyi bilsin, güvenlik analisti gibi anlatsın'));P.append(l);
+    ln('p','Hikâye dışında eskisi gibi yalnızca istenen şeyi yapar. Değişiklik bir sonraki konuşmada geçerli olur.');
   }else ln('p','Bu karakter için ayar yok.');
   bt('Kapat',()=>$('#cp').classList.add('hid'),true);
 }
