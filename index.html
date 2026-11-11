@@ -206,6 +206,7 @@ function play(d){
   r.onended=()=>{srcs=srcs.filter(x=>x!==r)};
 }
 async function mic(){
+  ctxResume();
   try{
     const m=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,channelCount:1}});
     S.stream=m;S.noMic=false;S.muted=false;micBtn();
@@ -223,6 +224,7 @@ async function mic(){
 /* ---------- Gemini Live ---------- */
 function send(o){if(S.ws&&S.ws.readyState===1)S.ws.send(JSON.stringify(o))}
 function connect(){
+  ctxResume();
   if(S.ws){const w=S.ws;S.ws=null;w.close()}
   S.ready=false;S.up=false;st('BAĞLANIYOR');
   const c=CH[S.ch],ws=new WebSocket(URL_+encodeURIComponent(S.key));S.ws=ws;
@@ -657,9 +659,12 @@ function cpRender(){
   if(S.ch==='kahya'){
     const k=CT();
     ln('p','Kritik görev: '+(k.on?'Görev '+Math.min(k.gun,10)+'/10, '+ctBar(k):'Henüz başlamadı.'));
-    if(k.gun>KRITIK_SON)ln('p','Bu bölümün sonuna geldin, devamı güncellemeyle gelecek.');
+    if(k.gun>KRITIK_SON)ln('p','Kritik görev tamamlandı, Ultron engellendi. İstersen sıfırlayıp baştan oynayabilirsin.');
     else bt(k.aktif?'Kritik göreve devam et':(k.on?'Sonraki göreve başla':'Kritik görev'),()=>ctLaunch());
     bt('Kritik görevi sıfırla',()=>{if(!confirm('Kritik görev sıfırlansın mı?'))return;try{localStorage.removeItem('uclu_crit')}catch(e){}S.crit=false;cpRender()},true);
+    const u=ST();ln('b','Ultron hikâyesi (günlük görevler)');
+    ln('p',u.on?(u.aktif?'Görev '+u.gun+' sürüyor.':'Görev '+u.gun+' için haber '+(u.ping?new Date(u.ping).toLocaleString('tr',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'yakında')+' civarında gelecek.'):'Kapalı. Başlatırsan ilk haber 30-120 dakika içinde bildirimle gelir, sonra günde bir görev olur.');
+    bt(u.on?(u.aktif?'Göreve devam et':'Görevi şimdi başlat'):'Hikâyeyi başlat',()=>{$('#stgo').onclick();$('#cp').classList.add('hid')});
   }else if(S.ch==='kaos'){
     const c=CS();
     const ck=(ad,key)=>{const l=document.createElement('label'),i=document.createElement('input');l.className='ck';i.type='checkbox';i.checked=!!c[key];i.onchange=()=>{const n=CS();n[key]=i.checked;sv('uclu_cs',n)};l.append(i,document.createTextNode(' '+ad));P.append(l)};
@@ -735,6 +740,8 @@ function ask(p){$('#rqt').textContent='Duran görevler: '+p.map(x=>x.t).join(', 
 function greet(){
   S.greet=false;const rep=S.report;S.report='';
   if(S.ele&&!S.silent&&S.ch==='kaos'){eleGreet();return}
+  if(S.cutOff&&!S.silent&&!S.crit&&!S.storyGo){S.cutOff=false;send({realtimeInput:{text:'[SİSTEM] Uygulama bir an arka plana gitti ve cevabın yarıda kaldı. Kullanıcı geri döndü: önceki konuşmaya bak, cevabını kısaca, tekrar etmeden tamamla.'}});return}
+  S.cutOff=false;
   if(S.crit&&!S.silent&&S.ch==='kahya'){ctGreet();return}
   if(S.storyGo&&!S.silent&&S.ch==='kahya'){stGreet();return}
   if(S.silent){if(rep)note('Tamamlanan görevler:\n'+rep);return}
@@ -758,8 +765,9 @@ $('#tkb').onclick=()=>{renderT();$('#tp').classList.remove('hid')};
 $('#tclose').onclick=()=>$('#tp').classList.add('hid');
 $('#tadd').onclick=()=>{const t=$('#tt').value.trim();if(!t)return;addTask(t,$('#td').value.trim(),+$('#tm').value||0,'',1);$('#tt').value=$('#td').value=$('#tm').value=''};
 $('#rqy').onclick=resume;$('#rqn').onclick=()=>$('#rq').classList.add('hid');
-function bgStop(){if(S.sleep||S.bgKeep)return;if(S.ws){const x=S.ws;S.ws=null;x.close()}S.ready=false;S.up=false;flush();stopMic()}
-document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!S.picking){pauseAll();bgStop()}}else{tasks().forEach(arm);if(S.picking){setTimeout(()=>{S.picking=false},2500);return}if(inCtx){keep();if($('#cs').classList.contains('hid')&&!S.sleep){S.greet=true;S.ready?greet():connect();if(!S.stream)mic()}}}});
+function ctxResume(){[inCtx,outCtx].forEach(c=>{try{if(c&&c.state!=='running')c.resume()}catch(e){}})}
+function bgStop(){if(S.sleep||S.bgKeep)return;if(!freshOut)S.cutOff=true;if(S.ws){const x=S.ws;S.ws=null;x.close()}S.ready=false;S.up=false;flush();stopMic()}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!S.picking){pauseAll();bgStop()}}else{tasks().forEach(arm);ctxResume();if(S.picking){setTimeout(()=>{S.picking=false},2500);return}if(inCtx){keep();if($('#cs').classList.contains('hid')&&!S.sleep){S.greet=true;S.ready?greet():connect();if(!S.stream)mic()}}}});
 addEventListener('pagehide',pauseAll);
 
 /* ---------- kamera ---------- */
@@ -885,8 +893,9 @@ function begin(silent){
   inCtx.resume();outCtx.resume();
   $('#ov').classList.add('hid');
   keep();
-  mic();showCards();
+  mic();startDirect();
 }
+function startDirect(){paint();tIn=tOut='';txt();$('#cs').classList.add('hid');S.greet=true;connect()}
 $('#yes').onclick=()=>begin(false);
 $('#no').onclick=()=>begin(true);
 if(S.key)$('#kin').classList.add('hid'),$('#ovp').textContent='Sesi açarsan seninle konuşurum.';
