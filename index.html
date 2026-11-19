@@ -237,20 +237,22 @@ function connect(){
   ws.onmessage=async e=>{
     if(S.ws!==ws)return;
     let t=e.data;if(t instanceof Blob)t=await t.text();
-    let m;try{m=JSON.parse(t)}catch(x){return}
-    if(m.setupComplete){S.up=S.ready=true;st('DİNLİYOR');if(S.greet)greet();}
+    let m;try{m=JSON.parse(t)}catch(x){return}S.lastRx=Date.now();
+    if(m.setupComplete){S.up=S.ready=true;S.rc=0;st('DİNLİYOR');if(S.greet)greet();if(S.pendText){const p=S.pendText;S.pendText='';S.lastText=p;S.sentT=Date.now();send({realtimeInput:{text:p}})}}
     const sc=m.serverContent;
     if(sc){
       if(sc.interrupted)flush();
+      if(sc.modelTurn)S.modelT=Date.now();
       for(const p of(sc.modelTurn?.parts||[]))if(p.inlineData?.data)play(p.inlineData.data);
-      if(sc.inputTranscription?.text){if(freshIn){tIn='';tOut='';freshIn=false}tIn+=sc.inputTranscription.text;freshOut=true;txt()}
-      if(sc.outputTranscription?.text){if(freshOut){tOut='';freshOut=false}tOut+=sc.outputTranscription.text;freshIn=true;txt()}
-      if(sc.turnComplete){freshOut=true;if(S.pend)setTimeout(goSleep,800);if(tIn||tOut){const h=ld('uclu_log',[]);h.push({c:S.ch,t:Date.now(),u:tIn.slice(0,600),a:tOut.slice(0,600)});sv('uclu_log',h.slice(-300))}}
+      if(sc.inputTranscription?.text){if(freshIn){tIn='';tOut='';freshIn=false}tIn+=sc.inputTranscription.text;freshOut=true;S.userT=Date.now();S.nudged=0;txt()}
+      if(sc.outputTranscription?.text){S.modelT=Date.now();if(freshOut){tOut='';freshOut=false}tOut+=sc.outputTranscription.text;freshIn=true;txt()}
+      if(sc.turnComplete){S.userT=0;freshOut=true;if(S.pend)setTimeout(goSleep,800);if(tIn||tOut){const h=ld('uclu_log',[]);h.push({c:S.ch,t:Date.now(),u:tIn.slice(0,600),a:tOut.slice(0,600)});sv('uclu_log',h.slice(-300))}}
     }
     if(m.toolCall){
+      S.modelT=Date.now();
       const rs=[];
       for(const f of m.toolCall.functionCalls||[]){
-        let res='ok';
+        let res='ok';try{
         if(f.name==='set_reminder'){const mn=Math.max(.1,+f.args.minutes||1);addTask(f.args.text||'Hatırlatma','',mn,'r');res='Kuruldu: '+mn+' dakika sonra, saat '+hm(Date.now()+mn*60000)+'. Görevler ekranında görünür.'}
         if(f.name==='remember'){const n=ld('uclu_mem',[]),t=String(f.args.note||'').slice(0,200);if(t&&!n.includes(t)){n.push(t);sv('uclu_mem',n.slice(-40))}}
         if(f.name==='add_task'){const mn=+f.args.minutes||0;addTask(f.args.title||'Görev',f.args.detail,mn,'',1);res=mn?'Eklendi, saat '+hm(Date.now()+mn*60000)+'.':'Eklendi.'}
@@ -263,6 +265,7 @@ function connect(){
         if(NM[f.name]||f.name==='get_location')res=await nCall(f);
         if(SN[f.name])res=S.crit?ctTool(f):stTool(f);
         if(f.name==='open_screen')res=uiOpen(f.args||{});
+        }catch(e){res='Başarısız: '+((e&&e.message)||e)}
         rs.push({id:f.id,name:f.name,response:{result:res}});
       }
       send({toolResponse:{functionResponses:rs}});
@@ -271,6 +274,9 @@ function connect(){
   ws.onclose=ev=>{
     if(S.ws!==ws)return;S.ready=false;
     if(!S.noSearch&&(!S.up||/not supported/i.test(ev.reason||''))){S.noSearch=true;connect();return}
+    if(S.up&&!S.sleep&&!document.hidden&&inCtx&&!/key|permission|quota|billing|invalid|denied/i.test(ev.reason||'')&&(S.rc=(S.rc||0)+1)<=4){
+      st('YENİDEN BAĞLANIYOR');setTimeout(()=>{if(S.ws===ws&&!S.sleep&&!S.ready){S.greet=false;connect()}},1500*S.rc);return;
+    }
     st('BAĞLANTI KOPTU');note(ev.reason||'Bağlantı kapandı. Anahtarı ve interneti kontrol et, sonra küreye dokun.');
   };
 }
@@ -280,7 +286,9 @@ function remind(t){
 }
 
 /* ---------- giriş ---------- */
-function sendText(t){if(!t.trim())return;tIn=t;tOut='';freshIn=true;freshOut=true;txt();send({realtimeInput:{text:t}})}
+function sendText(t){if(!t.trim())return;tIn=t;tOut='';freshIn=true;freshOut=true;txt();
+  if(!S.ready||!S.ws||S.ws.readyState!==1){S.pendText=t;note('Bağlantı yok, yeniden bağlanıyorum…');if(inCtx&&!S.sleep&&(!S.ws||S.ws.readyState>1)){S.greet=false;connect()}return}
+  S.lastText=t;S.sentT=Date.now();send({realtimeInput:{text:t}})}
 $('#tx').addEventListener('keydown',e=>{if(e.key==='Enter'){sendText(e.target.value);e.target.value=''}});
 $('#tx').addEventListener('paste',e=>{try{const fs=[...(e.clipboardData&&e.clipboardData.files||[])].filter(f=>f.type.startsWith('image/'));if(fs.length){e.preventDefault();$('#fi').onchange({target:{files:fs,value:''}})}}catch(x){}});
 $('#mic').onclick=()=>{if(S.sleep)return;if(!S.stream){if(inCtx){inCtx.resume();mic()}return}S.muted=!S.muted;micBtn()};
@@ -398,7 +406,7 @@ async function nCall(f){
   try{
     if(f.name==='get_location')return await getLoc();
     const p={};for(const k in(f.args||{}))p[k]=String(f.args[k]);
-    const r=await JN[NM[f.name]](p);
+    const r=await Promise.race([JN[NM[f.name]](p),new Promise((_,j)=>setTimeout(()=>j(new Error('zaman aşımı')),12000))]);
     return(r&&r.message)||'Tamam.';
   }catch(e){return 'Başarısız oldu: '+((e&&e.message)||e)}
 }
@@ -726,7 +734,7 @@ function ctRelease(){
     if(inCtx&&!S.silent){$('#cs').classList.add('hid');S.greet=true;connect()}
   });
 }
-function ctInit(){try{const s=CT();if(s.on&&s.aktif){if(s.faz==='ele'){S.ele=true;S.ch='kaos';paint();eleRed(true)}else{S.crit=true;S.ch='kahya';paint()}}$('#cv').addEventListener('click',ctTapOrb);$('#hudb').onclick=()=>{const t=CT();if(!ctHazir(t))return;const m=ctFinish(t.ozet||'Görev tamamlandı.');send({realtimeInput:{text:'[SİSTEM] '+m}})};setInterval(ctWatch,4000)}catch(e){}}
+function ctInit(){try{const s=CT();if(s.on&&s.aktif){if(s.faz==='ele'){S.ele=true;S.ch='kaos';paint();eleRed(true)}else{S.crit=true;S.ch='kahya';paint()}}$('#cv').addEventListener('click',ctTapOrb);$('#hudb').onclick=()=>{const t=CT();if(!ctHazir(t))return;const m=ctFinish(t.ozet||'Görev tamamlandı.');send({realtimeInput:{text:'[SİSTEM] '+m}})};setInterval(ctWatch,4000);setInterval(voiceWatch,3000)}catch(e){}}
 async function nInit(){if(!LN)return;try{const p=await LN.checkPermissions();if(p.display!=='granted')await LN.requestPermissions()}catch(e){}}
 function nSched(x){if(!LN||!(x.due>Date.now()+1000))return;try{LN.schedule({notifications:[{id:nid(x.id),title:'Jarvis',body:(x.k==='r'?'Zamanlayıcı doldu: ':'Görev zamanı: ')+x.t,schedule:{at:new Date(x.due),allowWhileIdle:true}}]}).catch(()=>{})}catch(e){}}
 function nCancel(id){if(!LN)return;try{LN.cancel({notifications:[{id:nid(id)}]}).catch(()=>{})}catch(e){}}
@@ -765,9 +773,28 @@ $('#tkb').onclick=()=>{renderT();$('#tp').classList.remove('hid')};
 $('#tclose').onclick=()=>$('#tp').classList.add('hid');
 $('#tadd').onclick=()=>{const t=$('#tt').value.trim();if(!t)return;addTask(t,$('#td').value.trim(),+$('#tm').value||0,'',1);$('#tt').value=$('#td').value=$('#tm').value=''};
 $('#rqy').onclick=resume;$('#rqn').onclick=()=>$('#rq').classList.add('hid');
+function wd(){
+  try{
+    if(S.sleep||document.hidden||!inCtx)return;
+    if(S.ready&&S.ws&&S.ws.readyState>1){S.ready=false;S.greet=false;connect();return}
+    if(S.sentT&&S.ready&&Date.now()-S.sentT>40000&&(S.lastRx||0)<S.sentT){
+      const p=S.lastText;S.sentT=0;S.pendText=p;note('Cevap gelmedi, yeniden bağlanıyorum…');S.greet=false;connect();
+    }
+  }catch(e){}
+}
+function voiceWatch(){
+  try{
+    if(!S.ready||S.sleep||S.silent||!S.userT||!(tIn||'').trim())return;
+    if((S.modelT||0)>=S.userT)return;
+    const bekle=Date.now()-S.userT;
+    if(bekle>12000&&!S.nudged){S.nudged=1;send({realtimeInput:{text:'[SİSTEM] Kullanıcı bir şey söyledi ama cevap vermedin. Son söylediği: "'+String(tIn).slice(-300)+'". Kısaca cevap ver.'}})}
+    else if(bekle>26000&&S.nudged===1){S.nudged=2;S.pendText='[SİSTEM] Bağlantı yenilendi. Kullanıcının son sözü: "'+String(tIn).slice(-300)+'". Cevap ver.';note('Cevap gelmedi, yeniden bağlanıyorum…');S.greet=false;connect()}
+  }catch(e){}
+}
+function nDone(){if(LN)try{LN.schedule({notifications:[{id:777002,title:'JARVIS',body:'Araştırma tamamlandı, dokun.',schedule:{at:new Date(Date.now()+1500)}}]}).catch(()=>{})}catch(e){}}
 function ctxResume(){[inCtx,outCtx].forEach(c=>{try{if(c&&c.state!=='running')c.resume()}catch(e){}})}
 function bgStop(){if(S.sleep||S.bgKeep)return;if(!freshOut)S.cutOff=true;if(S.ws){const x=S.ws;S.ws=null;x.close()}S.ready=false;S.up=false;flush();stopMic()}
-document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!S.picking){pauseAll();bgStop()}}else{tasks().forEach(arm);ctxResume();if(S.picking){setTimeout(()=>{S.picking=false},2500);return}if(inCtx){keep();if($('#cs').classList.contains('hid')&&!S.sleep){S.greet=true;S.ready?greet():connect();if(!S.stream)mic()}}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!S.picking){pauseAll();bgStop()}}else{tasks().forEach(arm);ctxResume();if(S.sleep&&S.workDone){S.workDone=false;wake();return}if(S.picking){setTimeout(()=>{S.picking=false},2500);return}if(inCtx){keep();if($('#cs').classList.contains('hid')&&!S.sleep){S.greet=true;S.ready?greet():connect();if(!S.stream)mic()}}}});
 addEventListener('pagehide',pauseAll);
 
 /* ---------- kamera ---------- */
@@ -780,7 +807,7 @@ async function cam(face){
 $('#cb').onclick=()=>{if(S.cam)stopCam();else $('#cq').classList.toggle('hid')};
 $('#cqx').onclick=()=>$('#cq').classList.add('hid');
 document.querySelectorAll('#cq [data-f]').forEach(b=>b.onclick=()=>{$('#cq').classList.add('hid');cam(b.dataset.f)});
-nInit();resume(true);tasks().forEach(arm);renderT();stInit();ctInit();
+nInit();resume(true);tasks().forEach(arm);renderT();stInit();ctInit();setInterval(wd,5000);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 /* ---------- uyku modu ---------- */
@@ -788,8 +815,11 @@ S.done=[];S.report='';
 function stopMic(){if(S.stream){S.stream.getTracks().forEach(t=>t.stop());S.stream=null}try{S.mp&&S.mp.disconnect();S.ms&&S.ms.disconnect()}catch(e){}lvIn=0}
 async function gen(text,srch,model){
   const b={contents:[{parts:[{text}]}]};if(srch)b.tools=[{google_search:{}}];
-  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(S.key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
-  const j=await r.json();if(!r.ok)throw new Error((j.error&&j.error.message)||r.status);
+  const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),70000);
+  let r,j;
+  try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(S.key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b),signal:ac.signal});j=await r.json()}
+  catch(e){throw new Error(e&&e.name==='AbortError'?'zaman aşımı (70 sn)':(e&&e.message)||'bağlantı hatası')}
+  finally{clearTimeout(tm)}if(!r.ok)throw new Error((j.error&&j.error.message)||r.status);
   return((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(p=>p.text||'').join('').trim()||'Sonuç boş döndü.';
 }
 async function research(x){
@@ -807,6 +837,7 @@ async function work(){
     const t=await research(x),a=tasks(),y=a.find(z=>z.id===x.id);
     if(y){y.res=t;y.st='done';saveT(a);S.done.push(x.t+': '+t.slice(0,500))}
   }
+  if(S.sleep&&q.length){S.workDone=true;if(!document.hidden)setTimeout(()=>{if(S.sleep&&S.workDone){S.workDone=false;wake()}},800);else nDone()}
   if(S.sleep&&q.length){st('UYUYOR · GÖREVLER TAMAM');note(ld('uclu_hint',false)?'Uyku modundayım. Uyandırmak için küreye dokun.':'')}
 }
 function listen(){
@@ -826,7 +857,7 @@ function endSleep(){
 function goSleep(){
   if(S.sleep||!$('#cs').classList.contains('hid'))return;
   const w=outCtx?(nextT-outCtx.currentTime)*1000:0;if(w>100){setTimeout(goSleep,w+200);return}
-  S.sleep=true;S.pend=false;
+  S.sleep=true;S.pend=false;S.workDone=false;
   if(S.ws){const x=S.ws;S.ws=null;x.close()}S.ready=false;flush();stopCam();stopMic();
   $('#cv').classList.add('sleep');st('UYUYOR');note(ld('uclu_hint',false)?'Uyku modundayım. Uyandırmak için küreye dokun.':'');
   work();
